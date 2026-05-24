@@ -1029,8 +1029,8 @@ const downloadMarksheet = async (student, project, showToast) => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   doc.setTextColor(...DARK);
-  doc.text("ANNUAL", W / 2, 34, { align: "center" });
-  doc.text("PROGRESS REPORT", W / 2, 40, { align: "center" });
+
+  doc.text("PROGRESS REPORT", W / 2, 34, { align: "center" });
 
   // ── Grade Interval table (top right) ─────────────────────────────────────────
   const gi = project.gradingScale || [
