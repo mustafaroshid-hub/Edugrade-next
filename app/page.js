@@ -80,8 +80,8 @@ const GlobalStyle = ({ dark }) => {
       --surface3: ${dark ? "#172338" : "#eaeff6"};
       --border:   ${dark ? "#1e2f47" : "#dde4ef"};
       --text:     ${dark ? "#e2e8f5" : "#0b1729"};
-      --text2:    ${dark ? "#5b7299" : "#7a8ea8"};
-      --text3:    ${dark ? "#354d6e" : "#a8b8cc"};
+      --text2:    ${dark ? "#8197b9" : "#5a6e88"};
+      --text3:    ${dark ? "#5d78a0" : "#8396ae"};
       --sky:      #0ea5e9;
       --sky2:     #38bdf8;
       --sky3:     #0284c7;
@@ -92,6 +92,7 @@ const GlobalStyle = ({ dark }) => {
       --yellow:   #f59e0b;
       --amber:    #f97316;
       --glow:     ${dark ? "rgba(14,165,233,0.15)" : "rgba(14,165,233,0.1)"};
+      --shadow-card: ${dark ? "0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 30px -22px rgba(0,0,0,0.7)" : "0 1px 2px rgba(16,24,40,0.05), 0 10px 24px -18px rgba(16,24,40,0.18)"};
       --font-sans: 'Sora', sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
@@ -107,7 +108,7 @@ const GlobalStyle = ({ dark }) => {
 
     input[type="text"], input[type="number"], input[type="email"], input[type="password"], input:not([type]) {
       width: 100%; padding: 11px 14px; border-radius: 10px;
-      border: 1.5px solid var(--border); background: var(--surface2);
+      border: 1px solid var(--border); background: var(--surface2);
       color: var(--text); font-family: var(--font-sans); font-size: 13.5px;
       font-weight: 400; outline: none; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
@@ -117,13 +118,16 @@ const GlobalStyle = ({ dark }) => {
       box-shadow: 0 0 0 3px var(--glow);
     }
     input::placeholder { color: var(--text3); }
+    @media (max-width: 640px) {
+      input[type="text"], input[type="number"], input[type="email"], input[type="password"], input:not([type]) { font-size: 16px; min-height: 44px; }
+    }
     button { cursor: pointer; font-family: var(--font-sans); }
     table { width: 100%; border-collapse: collapse; }
     th {
       background: var(--surface2); color: var(--text2);
       font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
       text-transform: uppercase; padding: 10px 14px; text-align: left;
-      white-space: nowrap; border-bottom: 1.5px solid var(--border);
+      white-space: nowrap; border-bottom: 1px solid var(--border);
     }
     td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
     tr:last-child td { border-bottom: none; }
@@ -173,14 +177,16 @@ const GlobalStyle = ({ dark }) => {
     body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
     body::before {
       content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-      background: radial-gradient(70% 42% at 50% -8%, ${dark ? "rgba(14,165,233,0.11)" : "rgba(14,165,233,0.10)"}, transparent 70%);
+      background: radial-gradient(70% 42% at 50% -8%, ${dark ? "rgba(14,165,233,0.07)" : "rgba(14,165,233,0.05)"}, transparent 70%);
     }
     ::selection { background: color-mix(in srgb, var(--sky) 30%, transparent); }
     button { transition: transform 0.12s ease, filter 0.15s ease, background 0.18s, border-color 0.18s, opacity 0.18s; -webkit-tap-highlight-color: transparent; }
     button:not(:disabled):hover { filter: brightness(1.07); }
     button:not(:disabled):active { transform: scale(0.97); }
     button:focus-visible, input:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
-    .dock-btn[data-active="1"] { background: color-mix(in srgb, var(--sky) 11%, transparent) !important; }
+    .dock-btn { position: relative; }
+    .dock-btn[data-active="1"] { background: color-mix(in srgb, var(--sky) 8%, transparent) !important; }
+    .dock-btn[data-active="1"]::before { content: ""; position: absolute; top: -7px; left: 28%; right: 28%; height: 2px; border-radius: 0 0 3px 3px; background: var(--sky); box-shadow: 0 2px 10px var(--sky); }
     tbody tr { transition: background 0.15s; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
@@ -220,11 +226,11 @@ const EduGradeLogo = ({ size = 44, style = {} }) => (
 const Card = ({ children, style = {}, animate, glass }) => (
   <div style={{
     background: glass ? "color-mix(in srgb, var(--surface) 88%, transparent)" : "var(--surface)",
-    border: "1.5px solid var(--border)",
-    borderRadius: 18,
+    border: "1px solid var(--border)",
+    borderRadius: 16,
     padding: 20,
     animation: animate ? "up 0.3s ease" : "none",
-    boxShadow: "0 10px 30px -18px rgba(0,0,0,0.45)",
+    boxShadow: "var(--shadow-card)",
     backdropFilter: glass ? "blur(16px)" : "none",
     ...style,
   }}>{children}</div>
@@ -239,13 +245,13 @@ const Label = ({ children }) => (
 
 const Btn = ({ children, onClick, variant = "primary", style = {}, disabled, loading, size = "md" }) => {
   const sizes = {
-    sm: { padding: "6px 13px", fontSize: 11.5, borderRadius: 9 },
-    md: { padding: "11px 20px", fontSize: 13.5, borderRadius: 11 },
-    lg: { padding: "14px 24px", fontSize: 14.5, borderRadius: 13 },
+    sm: { padding: "6px 13px", fontSize: 12, borderRadius: 9, minHeight: 34 },
+    md: { padding: "10px 20px", fontSize: 13.5, borderRadius: 11, minHeight: 44 },
+    lg: { padding: "14px 24px", fontSize: 14.5, borderRadius: 13, minHeight: 50 },
   };
   const base = {
     display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
-    border: "none", fontWeight: 700,
+    border: "none", fontWeight: 600,
     transition: "all 0.18s", cursor: disabled || loading ? "not-allowed" : "pointer",
     opacity: disabled || loading ? 0.5 : 1, letterSpacing: "0.01em",
     ...sizes[size],
@@ -254,27 +260,27 @@ const Btn = ({ children, onClick, variant = "primary", style = {}, disabled, loa
     primary: {
       background: "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
       color: "#fff",
-      boxShadow: "0 4px 16px rgba(14,165,233,0.35)",
+      boxShadow: "0 1px 2px rgba(2,60,100,0.35), 0 8px 18px -8px rgba(14,165,233,0.55)",
     },
     secondary: {
       background: "var(--surface2)", color: "var(--text)",
-      border: "1.5px solid var(--border)"
+      border: "1px solid var(--border)"
     },
     danger: {
       background: "color-mix(in srgb,var(--red) 10%,transparent)", color: "var(--red)",
-      border: "1.5px solid color-mix(in srgb,var(--red) 22%,transparent)"
+      border: "1px solid color-mix(in srgb,var(--red) 22%,transparent)"
     },
     ghost: {
       background: "transparent", color: "var(--text2)",
-      border: "1.5px solid var(--border)"
+      border: "1px solid var(--border)"
     },
     sky: {
       background: "color-mix(in srgb,var(--sky) 12%,transparent)",
-      color: "var(--sky)", border: "1.5px solid color-mix(in srgb,var(--sky) 28%,transparent)"
+      color: "var(--sky)", border: "1px solid color-mix(in srgb,var(--sky) 28%,transparent)"
     },
     green: {
       background: "color-mix(in srgb,var(--green) 12%,transparent)",
-      color: "var(--green)", border: "1.5px solid color-mix(in srgb,var(--green) 28%,transparent)"
+      color: "var(--green)", border: "1px solid color-mix(in srgb,var(--green) 28%,transparent)"
     },
   };
   return (
@@ -297,7 +303,7 @@ const Pill = ({ children, color }) => (
 const Toast = ({ msg }) => (
   <div style={{
     position: "fixed", top: "calc(18px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)",
-    background: "var(--surface)", border: "1.5px solid var(--border)",
+    background: "var(--surface)", border: "1px solid var(--border)",
     color: "var(--text)", padding: "10px 22px", borderRadius: 40, fontSize: 13,
     fontWeight: 600, zIndex: 9999, boxShadow: "0 12px 40px rgba(0,0,0,0.28)",
     animation: "toastPop 0.24s cubic-bezier(0.34,1.56,0.64,1)", whiteSpace: "nowrap",
@@ -307,7 +313,7 @@ const Toast = ({ msg }) => (
 
 const StatTile = ({ label, value, color, style = {}, onClick, actionLabel }) => (
   <div style={{
-    background: "var(--surface2)", border: "1.5px solid var(--border)",
+    background: "var(--surface2)", border: "1px solid var(--border)",
     borderRadius: 14, padding: "14px 16px", flex: 1, ...style
   }}>
     <div style={{
@@ -323,7 +329,7 @@ const StatTile = ({ label, value, color, style = {}, onClick, actionLabel }) => 
       {onClick && (
         <button onClick={onClick} style={{
           padding: "5px 11px", borderRadius: 8,
-          border: "1.5px solid var(--border)",
+          border: "1px solid var(--border)",
           background: "var(--surface)", color: "var(--sky)",
           fontSize: 10.5, fontWeight: 700,
           cursor: "pointer", transition: "all 0.15s",
@@ -370,7 +376,7 @@ const SectionHeader = ({ label, title, subtitle }) => (
         {label}
       </div>
     )}
-    {title && <h2 style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, marginBottom: 4, letterSpacing: "-0.02em" }}>{title}</h2>}
+    {title && <h2 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15, marginBottom: 4, letterSpacing: "-0.02em" }}>{title}</h2>}
     {subtitle && <p style={{ color: "var(--text2)", fontSize: 13 }}>{subtitle}</p>}
   </div>
 );
@@ -384,7 +390,7 @@ const StudentListModal = ({ title, students, color, onClose }) => (
     backdropFilter: "blur(8px)", padding: "20px 16px",
   }} onClick={e => e.target === e.currentTarget && onClose()}>
     <div style={{
-      background: "var(--surface)", border: "1.5px solid var(--border)",
+      background: "var(--surface)", border: "1px solid var(--border)",
       borderRadius: 22, width: "100%", maxWidth: 400,
       maxHeight: "72vh", display: "flex", flexDirection: "column",
       animation: "up 0.26s cubic-bezier(0.34,1.56,0.64,1)",
@@ -392,7 +398,7 @@ const StudentListModal = ({ title, students, color, onClose }) => (
     }}>
       <div style={{
         padding: "18px 20px",
-        borderBottom: "1.5px solid var(--border)",
+        borderBottom: "1px solid var(--border)",
         display: "flex", justifyContent: "space-between", alignItems: "center"
       }}>
         <div>
@@ -406,7 +412,7 @@ const StudentListModal = ({ title, students, color, onClose }) => (
         </div>
         <button onClick={onClose} style={{
           width: 32, height: 32, borderRadius: "50%",
-          border: "1.5px solid var(--border)",
+          border: "1px solid var(--border)",
           background: "var(--surface2)", color: "var(--text2)",
           fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center",
         }}>×</button>
@@ -420,7 +426,7 @@ const StudentListModal = ({ title, students, color, onClose }) => (
           <div key={s.roll} style={{
             display: "flex", alignItems: "center", gap: 12,
             padding: "10px 14px", borderRadius: 12, marginBottom: 7,
-            background: "var(--surface2)", border: "1.5px solid var(--border)",
+            background: "var(--surface2)", border: "1px solid var(--border)",
           }}>
             <div style={{
               width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
@@ -469,7 +475,7 @@ const TieBreakModal = ({ students, onClose, onSave, saving }) => {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 9999 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "82vh", overflowY: "auto", border: "1.5px solid var(--border)", borderBottom: "none" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "82vh", overflowY: "auto", border: "1px solid var(--border)", borderBottom: "none" }}>
         <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Resolve Tied Merit</div>
         <div style={{ fontSize: 11.5, color: "var(--text2)", marginBottom: 14, lineHeight: 1.5 }}>
           Students with the same GPA and total are ranked by roll (lower roll first) unless you reorder them here. Use the arrows to decide who ranks higher. Editing a student's marks later clears their manual order.
@@ -487,7 +493,7 @@ const TieBreakModal = ({ students, onClose, onSave, saving }) => {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {g.map((s, i) => (
-                  <div key={s.roll} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "9px 12px" }}>
+                  <div key={s.roll} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, padding: "9px 12px" }}>
                     <div style={{ minWidth: 34, fontWeight: 800, fontSize: 13, color: "var(--yellow)", fontFamily: "var(--font-mono)" }}>#{base + i}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
@@ -546,7 +552,7 @@ const ShareModal = ({ project, firebase, user, userData, showToast, onClose, onC
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(6px)" }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "22px 22px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "82vh", overflowY: "auto", border: "1.5px solid var(--border)", borderBottom: "none", animation: "up 0.25s ease" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "22px 22px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "82vh", overflowY: "auto", border: "1px solid var(--border)", borderBottom: "none", animation: "up 0.25s ease" }}>
         <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sky)", marginBottom: 4 }}>👥 Co-teachers</div>
         <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.02em", marginBottom: 4 }}>{project.examName}</div>
         <div style={{ fontSize: 11.5, color: "var(--text2)", marginBottom: 16, lineHeight: 1.55 }}>
@@ -560,7 +566,7 @@ const ShareModal = ({ project, firebase, user, userData, showToast, onClose, onC
         {list.length === 0 ? (
           <div style={{ textAlign: "center", color: "var(--text2)", fontSize: 12.5, padding: "18px 0" }}>Not shared with anyone yet</div>
         ) : list.map(em => (
-          <div key={em} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", marginBottom: 7 }}>
+          <div key={em} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, padding: "9px 12px", marginBottom: 7 }}>
             <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--sky),var(--indigo))", color: "#fff", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{em[0].toUpperCase()}</div>
             <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{em}</div>
             <Btn variant="danger" size="sm" disabled={busy} onClick={() => remove(em)}>Remove</Btn>
@@ -1073,7 +1079,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
       <div style={{ background: "linear-gradient(90deg,#f59e0b,#fb923c)", padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: "rgba(0,0,0,0.2)", border: "none", borderRadius: 8, color: "#fff", padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>← Users</button>
         <div style={{ flex: 1, fontSize: 11.5, fontWeight: 700, color: "#fff" }}>
-          👁 Viewing as <span style={{ fontWeight: 800 }}>{targetUser.name || targetUser.email}</span>
+          <span style={{display:"inline-flex",verticalAlign:"-2px",marginRight:6}}><IcoEye s={14}/></span>Viewing as <span style={{ fontWeight: 800 }}>{targetUser.name || targetUser.email}</span>
         </div>
         {targetUser.email !== ADMIN_EMAIL && (
           <button onClick={async () => {
@@ -1091,7 +1097,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
 
       {confirmModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
-          <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, animation: "up 0.2s ease" }}>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, animation: "up 0.2s ease" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>{confirmModal.title}</div>
             <div style={{ color: "var(--text2)", fontSize: 13, marginBottom: 20, lineHeight: 1.5 }}>{confirmModal.msg}</div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -1104,7 +1110,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
 
       {renamingProject && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
-          <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 20, padding: 24, width: "100%", maxWidth: 380 }}>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 24, width: "100%", maxWidth: 380 }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Rename Project</div>
             <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onKeyDown={e => e.key === "Enter" && renameProject(renamingProject, renameValue)} placeholder="Project name" style={{ marginBottom: 14 }} />
             <div style={{ display: "flex", gap: 10 }}>
@@ -1140,9 +1146,9 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
               const passRate = p.students.length ? ((pass / p.students.length) * 100).toFixed(0) : 0;
               const accent = ["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i % 6];
               return (
-                <div key={p.id} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderLeft: `3px solid ${accent}`, borderRadius: 16, marginBottom: 9, overflow: "hidden" }}>
+                <div key={p.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderLeft: `3px solid ${accent}`, borderRadius: 16, marginBottom: 9, overflow: "hidden" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px" }}>
-                    <div style={{ width: 46, height: 46, borderRadius: 14, flexShrink: 0, background: `color-mix(in srgb,${accent} 12%,var(--surface2))`, border: `1.5px solid color-mix(in srgb,${accent} 20%,var(--border))`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 14, flexShrink: 0, background: `color-mix(in srgb,${accent} 12%,var(--surface2))`, border: `1px solid color-mix(in srgb,${accent} 20%,var(--border))`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <IcoDoc s={22} c={accent} />
                     </div>
                     <div onClick={() => { setActiveProjectIndex(i); setSubjectEntries(freshEntries(p)); setViewStudent(null); setPage("entry"); }} style={{ flex: 1, cursor: "pointer" }}>
@@ -1161,11 +1167,11 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                   </div>
                   <div style={{ display: "flex", borderTop: "1px solid var(--border)" }}>
                     {[
-                      { icon: "✏️", label: "Rename", action: () => { setRenamingProject(p.id); setRenameValue(p.examName); } },
-                      { icon: "🗑", label: "Delete", action: () => deleteProject(p.id), danger: true },
+                      { icon: <IcoPencil s={14}/>, label: "Rename", action: () => { setRenamingProject(p.id); setRenameValue(p.examName); } },
+                      { icon: <IcoTrash s={14}/>, label: "Delete", action: () => deleteProject(p.id), danger: true },
                     ].map(({ icon, label, action, danger }) => (
                       <button key={label} onClick={e => { e.stopPropagation(); action(); }} style={{ flex: 1, padding: "8px 2px", border: "none", background: "transparent", color: danger ? "var(--red)" : "var(--text2)", fontSize: 10.5, fontWeight: 600, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, borderRight: label !== "Delete" ? "1px solid var(--border)" : undefined }}>
-                        <span style={{ fontSize: 14 }}>{icon}</span><span>{label}</span>
+                        <span style={{ display: "flex" }}>{icon}</span><span>{label}</span>
                       </button>
                     ))}
                   </div>
@@ -1179,7 +1185,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
         {page === "setup" && (
           <div style={{ animation: "up 0.28s ease", paddingTop: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-              <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Back</button>
+              <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Back</button>
               <h2 style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.02em" }}>New Project</h2>
             </div>
             <Card style={{ marginBottom: 14 }}>
@@ -1206,7 +1212,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                   {Array(Number(subjectCount)).fill(null).map((_, i) => {
                     const ss = getSS(i);
                     return (
-                      <div key={i} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "14px 16px", transition:"border-color 0.2s", position:"relative", overflow:"hidden", opacity: setupDragIdx===i?0.6:1 }}>
+                      <div key={i} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", transition:"border-color 0.2s", position:"relative", overflow:"hidden", opacity: setupDragIdx===i?0.6:1 }}>
                         <div style={{position:"absolute",top:0,left:0,width:3,height:"100%",background:"linear-gradient(180deg,var(--sky),var(--indigo))",opacity:0.6}}/>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                           <div onPointerDown={handleSetupPointerDown(i)} style={{cursor:"grab",touchAction:"none",fontSize:16,color:"var(--text3)",padding:"2px 4px",flexShrink:0,userSelect:"none"}}>⠿</div>
@@ -1274,22 +1280,22 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
             ) : (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <button onClick={() => { setPage("home"); setViewStudent(null); }} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
+                  <button onClick={() => { setPage("home"); setViewStudent(null); }} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>{activeProject.examName}</div>
                     <div style={{ color: "var(--text2)", fontSize: 11 }}>{[activeProject.institution, activeProject.className].filter(Boolean).join(" · ") || "Mark Entry"}</div>
                   </div>
-                  <button onClick={openReorderModal} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "var(--sky)", cursor: "pointer", flexShrink: 0 }}>🔀 Reorder</button>
+                  <button onClick={openReorderModal} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "var(--sky)", cursor: "pointer", flexShrink: 0 }}>🔀 Reorder</button>
                 </div>
 
                 {reorderModalOpen && (
                   <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 9999 }} onClick={() => setReorderModalOpen(false)}>
-                    <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto", border: "1.5px solid var(--border)", borderBottom: "none" }}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto", border: "1px solid var(--border)", borderBottom: "none" }}>
                       <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Reorder Subjects</div>
                       <div style={{ fontSize: 11.5, color: "var(--text2)", marginBottom: 14 }}>Drag ⠿ or use the arrows. This updates the order everywhere — entry page, marksheet, and every student already saved.</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }} onPointerMove={handleReorderPointerMove} onPointerUp={handleReorderPointerUp} onPointerLeave={handleReorderPointerUp}>
                         {reorderList.map((item, i) => (
-                          <div key={item.origIndex} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 12px", opacity: dragIdx===i?0.6:1 }}>
+                          <div key={item.origIndex} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 12px", opacity: dragIdx===i?0.6:1 }}>
                             <div onPointerDown={handleReorderPointerDown(i)} style={{cursor:"grab",touchAction:"none",fontSize:16,color:"var(--text3)",userSelect:"none"}}>⠿</div>
                             <div style={{width:20,height:20,borderRadius:6,background:"color-mix(in srgb,var(--sky) 16%,var(--surface))",color:"var(--sky)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}</div>
                             <div style={{flex:1,fontSize:13,fontWeight:600}}>{item.name}</div>
@@ -1328,7 +1334,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                       const passLive = r.pct >= (activeProject.passThreshold ?? 33) && examOnlyPctLive >= (activeProject.passThreshold ?? 33);
                       const subFull = Number(ss.caFull) + ((Number(ss.examPct) || 70) / 100) * Number(ss.examFull || 100);
                       return (
-                        <div key={si} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+                        <div key={si} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid var(--border)", background: "var(--surface3)" }}>
                             <div style={{ fontWeight: 700, fontSize: 13 }}>{subName}</div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1400,7 +1406,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                   <Card style={{ padding: 0, borderRadius: 18, overflow: "hidden", marginBottom: 14 }}>
                     <div style={{ padding: "14px 16px 10px", fontWeight: 700, fontSize: 13, borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                       <span>Students ({sortedByRoll.length})</span>
-                      <Btn variant="sky" size="sm" onClick={() => downloadAllMarksheetsZip(activeProject, showToast)}>📦 All Marksheets (ZIP)</Btn>
+                      <Btn variant="sky" size="sm" onClick={() => downloadAllMarksheetsZip(activeProject, showToast)}><IcoZip s={14}/> All Marksheets (ZIP)</Btn>
                     </div>
                     {sortedByRoll.map(s => {
                       const rank = meritRanks[s.roll];
@@ -1425,7 +1431,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                             <div style={{ padding: "10px 16px 14px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                                 {(s.subjectResults || []).map((sr, si) => (
-                                  <div key={si} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "8px 12px", minWidth: 90 }}>
+                                  <div key={si} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", minWidth: 90 }}>
                                     <div style={{ fontSize: 10, color: "var(--text2)", fontWeight: 700, marginBottom: 3 }}>{activeProject.subjectNames?.[si] || `Sub ${si + 1}`}</div>
                                     <div style={{ fontWeight: 800, fontSize: 15, color: gradeColor(sr.grade), fontFamily: "var(--font-mono)" }}>{sr.ab}</div>
                                     <div style={{ fontSize: 10, color: "var(--text2)" }}>{sr.pct?.toFixed(1)}% · {sr.grade}</div>
@@ -1443,7 +1449,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                                   window.scrollTo({ top: 0, behavior: "smooth" });
                                   showToast("✏️ Loaded for editing");
                                 }}>✏️ Edit Marks</Btn>
-                                <Btn variant="danger" size="sm" style={{ flex: 1 }} onClick={() => deleteStudent(s.roll)}>🗑 Delete</Btn>
+                                <Btn variant="danger" size="sm" style={{ flex: 1 }} onClick={() => deleteStudent(s.roll)}><IcoTrash s={14}/> Delete</Btn>
                               </div>
                             </div>
                           )}
@@ -1460,7 +1466,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
         {page === "entry" && activeProject && adminTab === "stats" && (
           <div style={{ animation: "up 0.28s ease", paddingTop: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
+              <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
               <div style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{activeProject.examName} · Stats</div>
             </div>
             {activeProject.students.length === 0 ? (
@@ -1482,7 +1488,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                       { label: "Pass Rate", value: `${((pass/activeProject.students.length)*100).toFixed(1)}%`, color: "var(--amber)" },
                       { label: "Top GPA", value: topStudent?.gpa, color: "var(--yellow)" },
                     ].map(({ label, value, color }) => (
-                      <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "14px 16px", textAlign: "center" }}>
+                      <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text2)", marginBottom: 4 }}>{label}</div>
                         <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: "var(--font-mono)" }}>{value}</div>
                       </div>
@@ -1501,7 +1507,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                     ))}
                   </Card>
                   {topStudent && (
-                    <Card style={{ border: "1.5px solid var(--yellow)", background: "color-mix(in srgb,var(--yellow) 5%,var(--surface))" }}>
+                    <Card style={{ border: "1px solid var(--yellow)", background: "color-mix(in srgb,var(--yellow) 5%,var(--surface))" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: "var(--yellow)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>🏆 Top Student</div>
                       <div style={{ fontWeight: 800, fontSize: 16 }}>{topStudent.name}</div>
                       <div style={{ color: "var(--text2)", fontSize: 12 }}>Roll: {topStudent.roll} · GPA {topStudent.gpa} · {topStudent.grade}</div>
@@ -1517,10 +1523,10 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
         {page === "entry" && activeProject && adminTab === "merit" && (
           <div style={{ animation: "up 0.28s ease", paddingTop: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
+              <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
               <div style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{activeProject.examName} · Merit</div>
               {getTieGroups(activeProject.students).length > 0 && (
-                <button onClick={() => setTieModalOpen(true)} style={{ background: "color-mix(in srgb,var(--amber) 10%,var(--surface))", border: "1.5px solid color-mix(in srgb,var(--amber) 35%,var(--border))", borderRadius: 10, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, color: "var(--amber)", cursor: "pointer", flexShrink: 0 }}>⚖ Ties ({getTieGroups(activeProject.students).length})</button>
+                <button onClick={() => setTieModalOpen(true)} style={{ background: "color-mix(in srgb,var(--amber) 10%,var(--surface))", border: "1px solid color-mix(in srgb,var(--amber) 35%,var(--border))", borderRadius: 10, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, color: "var(--amber)", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}><IcoScale s={13}/> Ties ({getTieGroups(activeProject.students).length})</button>
               )}
               {tieModalOpen && <TieBreakModal students={activeProject.students} onClose={() => setTieModalOpen(false)} onSave={saveTieOrder} saving={saving} />}
             </div>
@@ -1532,7 +1538,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                   const rank = idx + 1;
                   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
                   return (
-                    <div key={s.roll} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, background: rank <= 3 ? `color-mix(in srgb,${gradeColor(s.grade)} 8%,var(--surface))` : "var(--surface2)", border: `1.5px solid ${rank <= 3 ? gradeColor(s.grade) : "var(--border)"}` }}>
+                    <div key={s.roll} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, background: rank <= 3 ? `color-mix(in srgb,${gradeColor(s.grade)} 8%,var(--surface))` : "var(--surface2)", border: `1px solid ${rank <= 3 ? gradeColor(s.grade) : "var(--border)"}` }}>
                       <div style={{ width: 32, textAlign: "center", fontWeight: 800, fontSize: medal ? 22 : 14, color: "var(--text2)", flexShrink: 0 }}>{medal || `#${rank}`}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div>
@@ -1555,14 +1561,14 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
 
       {/* Admin bottom nav (only when in entry page with a project) */}
       {page === "entry" && activeProject && (
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, background: "var(--surface)", borderTop: "1.5px solid var(--border)", display: "flex", justifyContent: "space-around", padding: "8px 0 12px" }}>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, background: "var(--surface)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-around", padding: "8px 0 calc(12px + env(safe-area-inset-bottom))" }}>
           {[
-            { id: "entry", label: "Entry", icon: "✏️" },
-            { id: "stats",  label: "Stats",  icon: "📊" },
-            { id: "merit",  label: "Merit",  icon: "🏆" },
+            { id: "entry", label: "Entry", icon: <IcoPencil s={19}/> },
+            { id: "stats",  label: "Stats",  icon: <IcoBar s={19}/> },
+            { id: "merit",  label: "Merit",  icon: <IcoTrophy s={19}/> },
           ].map(({ id, label, icon }) => (
             <button key={id} onClick={() => setAdminTab(id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "transparent", border: "none", cursor: "pointer", color: adminTab === id ? "var(--sky)" : "var(--text3)", padding: "4px 0" }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>
+              <span style={{ display: "flex" }}>{icon}</span>
               <span style={{ fontSize: 10, fontWeight: adminTab === id ? 800 : 500 }}>{label}</span>
               {adminTab === id && <div style={{ width: 20, height: 2, borderRadius: 1, background: "var(--sky)" }}/>}
             </button>
@@ -1619,15 +1625,15 @@ const AdminPanel = ({ firebase, showToast, onClose }) => {
   return (
     <div style={{ position:"fixed",inset:0,zIndex:5000,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"flex-end",justifyContent:"center",backdropFilter:"blur(8px)" }}
       onClick={e => e.target===e.currentTarget && onClose()}>
-      <div style={{ background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:"22px 22px 0 0",width:"100%",maxWidth:560,maxHeight:"88vh",display:"flex",flexDirection:"column",animation:"up 0.3s ease",boxShadow:"0 -16px 60px rgba(0,0,0,0.28)" }}>
+      <div style={{ background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"22px 22px 0 0",width:"100%",maxWidth:560,maxHeight:"88vh",display:"flex",flexDirection:"column",animation:"up 0.3s ease",boxShadow:"0 -16px 60px rgba(0,0,0,0.28)" }}>
 
-        <div style={{ padding:"20px 22px 14px",borderBottom:"1.5px solid var(--border)" }}>
+        <div style={{ padding:"20px 22px 14px",borderBottom:"1px solid var(--border)" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
             <div>
               <div style={{ fontSize:9.5,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--yellow)",marginBottom:4 }}>⚡ Admin Control</div>
               <h2 style={{ fontWeight:800,fontSize:20,letterSpacing:"-0.02em" }}>Dashboard</h2>
             </div>
-            <button onClick={onClose} style={{ width:34,height:34,borderRadius:"50%",border:"1.5px solid var(--border)",background:"var(--surface2)",color:"var(--text2)",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer" }}>×</button>
+            <button onClick={onClose} style={{ width:34,height:34,borderRadius:"50%",border:"1px solid var(--border)",background:"var(--surface2)",color:"var(--text2)",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer" }}>×</button>
           </div>
           {!loading && !permError && (
             <div style={{ display:"flex",gap:8,marginBottom:14 }}>
@@ -1636,7 +1642,7 @@ const AdminPanel = ({ firebase, showToast, onClose }) => {
                 { label:"Active",value:users.filter(u=>!u.blocked).length,   color:"var(--green)" },
                 { label:"Blocked",value:users.filter(u=>u.blocked).length,   color:"var(--red)"   },
               ].map(({ label,value,color }) => (
-                <div key={label} style={{ flex:1,background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:12,padding:"10px 12px",textAlign:"center" }}>
+                <div key={label} style={{ flex:1,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",textAlign:"center" }}>
                   <div style={{ fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--text2)",marginBottom:3 }}>{label}</div>
                   <div style={{ fontSize:20,fontWeight:800,color,fontFamily:"var(--font-mono)" }}>{value}</div>
                 </div>
@@ -1644,7 +1650,7 @@ const AdminPanel = ({ firebase, showToast, onClose }) => {
             </div>
           )}
           {!loading && !permError && users.length > 0 && (
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search by name or email…" style={{ marginBottom:0 }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ marginBottom:0 }} />
           )}
         </div>
 
@@ -1654,13 +1660,13 @@ const AdminPanel = ({ firebase, showToast, onClose }) => {
               <div style={{ textAlign:"center",fontSize:36,marginBottom:14 }}>🔒</div>
               <div style={{ fontWeight:800,fontSize:16,textAlign:"center",marginBottom:8 }}>Firestore Permission Denied</div>
               <p style={{ color:"var(--text2)",fontSize:12.5,lineHeight:1.7,marginBottom:16,textAlign:"center" }}>Update your Firestore rules in Firebase Console:</p>
-              <div style={{ background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:12,padding:"14px 16px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--sky)",lineHeight:1.9,whiteSpace:"pre-wrap",userSelect:"all" }}>{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAdmin() {\n      return request.auth != null &&\n        request.auth.token.email == "${ADMIN_EMAIL}";\n    }\n    match /users/{userId} {\n      allow read, write: if request.auth.uid == userId || isAdmin();\n      match /projects/{projectId} {\n        function isCollab() {\n          return request.auth != null && request.auth.token.email != null &&\n            request.auth.token.email.lower() in resource.data.get('collaborators', []);\n        }\n        allow read: if request.auth.uid == userId || isAdmin() || isCollab();\n        allow create, delete: if request.auth.uid == userId || isAdmin();\n        allow update: if request.auth.uid == userId || isAdmin() ||\n          (isCollab() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['students', 'subjectNames', 'subjectSettings']));\n      }\n    }\n    match /adminNotifications/{docId} {\n      allow read, update, delete: if isAdmin();\n      allow create: if request.auth != null;\n    }\n    match /sharedProjects/{shareId} {\n      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;\n      allow read: if request.auth != null && (resource.data.ownerUid == request.auth.uid || resource.data.email == request.auth.token.email) || isAdmin();\n      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid || isAdmin();\n    }\n  }\n}`}</div>
+              <div style={{ background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:12,padding:"14px 16px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--sky)",lineHeight:1.9,whiteSpace:"pre-wrap",userSelect:"all" }}>{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAdmin() {\n      return request.auth != null &&\n        request.auth.token.email == "${ADMIN_EMAIL}";\n    }\n    match /users/{userId} {\n      allow read, write: if request.auth.uid == userId || isAdmin();\n      match /projects/{projectId} {\n        function isCollab() {\n          return request.auth != null && request.auth.token.email != null &&\n            request.auth.token.email.lower() in resource.data.get('collaborators', []);\n        }\n        allow read: if request.auth.uid == userId || isAdmin() || isCollab();\n        allow create, delete: if request.auth.uid == userId || isAdmin();\n        allow update: if request.auth.uid == userId || isAdmin() ||\n          (isCollab() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['students', 'subjectNames', 'subjectSettings']));\n      }\n    }\n    match /adminNotifications/{docId} {\n      allow read, update, delete: if isAdmin();\n      allow create: if request.auth != null;\n    }\n    match /sharedProjects/{shareId} {\n      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;\n      allow read: if request.auth != null && (resource.data.ownerUid == request.auth.uid || resource.data.email == request.auth.token.email) || isAdmin();\n      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid || isAdmin();\n    }\n  }\n}`}</div>
               <Btn onClick={onClose} style={{ width:"100%",marginTop:16 }} variant="secondary">Close</Btn>
             </div>
           ) : filteredUsers.length === 0 ? (
             <div style={{ textAlign:"center",color:"var(--text2)",padding:"40px 0",fontSize:13 }}>{search ? "No users match" : "No users found"}</div>
           ) : filteredUsers.map(u => (
-            <div key={u.id} onClick={() => setImpersonating(u)} style={{ display:"flex",alignItems:"center",gap:12,padding:"13px 15px",borderRadius:16,marginBottom:8,background:u.blocked?"color-mix(in srgb,var(--red) 5%,var(--surface2))":"var(--surface2)",border:`1.5px solid ${u.blocked?"color-mix(in srgb,var(--red) 22%,var(--border))":"var(--border)"}`,cursor:"pointer",transition:"opacity 0.15s" }}>
+            <div key={u.id} onClick={() => setImpersonating(u)} style={{ display:"flex",alignItems:"center",gap:12,padding:"13px 15px",borderRadius:16,marginBottom:8,background:u.blocked?"color-mix(in srgb,var(--red) 5%,var(--surface2))":"var(--surface2)",border:`1px solid ${u.blocked?"color-mix(in srgb,var(--red) 22%,var(--border))":"var(--border)"}`,cursor:"pointer",transition:"opacity 0.15s" }}>
               <div style={{ width:42,height:42,borderRadius:14,flexShrink:0,background:u.blocked?"color-mix(in srgb,var(--red) 18%,var(--surface))":"linear-gradient(135deg,#38bdf8,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:u.blocked?18:17,fontWeight:800,color:"#fff" }}>
                 {u.blocked ? "🚫" : (u.name||"?")[0].toUpperCase()}
               </div>
@@ -1695,6 +1701,13 @@ const IcoSettings = ({s=20,c="currentColor"}) => <SvgIcon size={s} stroke={c}><c
 const IcoDoc      = ({s=20,c="currentColor"}) => <SvgIcon size={s} stroke={c}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></SvgIcon>;
 const IcoUsers    = ({s=20,c="currentColor"}) => <SvgIcon size={s} stroke={c}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></SvgIcon>;
 const IcoSun      = ({s=16}) => <SvgIcon size={s}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></SvgIcon>;
+const IcoTrash    = ({s=16}) => <SvgIcon size={s}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></SvgIcon>;
+const IcoZip      = ({s=16}) => <SvgIcon size={s}><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.3 7L12 12l8.7-5"/><path d="M12 22V12"/></SvgIcon>;
+const IcoScale    = ({s=16}) => <SvgIcon size={s}><path d="M12 3v18"/><path d="M5 21h14"/><path d="M3 8h18"/><path d="M6 8l-3 7a4 4 0 0 0 6 0z"/><path d="M18 8l-3 7a4 4 0 0 0 6 0z"/></SvgIcon>;
+const IcoDownload = ({s=16}) => <SvgIcon size={s}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></SvgIcon>;
+const IcoEye      = ({s=16}) => <SvgIcon size={s}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></SvgIcon>;
+const IcoWifiOff  = ({s=16}) => <SvgIcon size={s}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></SvgIcon>;
+const IcoBolt     = ({s=16}) => <SvgIcon size={s}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></SvgIcon>;
 const IcoMoon     = ({s=16}) => <SvgIcon size={s}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></SvgIcon>;
 
 // ─── Dock ─────────────────────────────────────────────────────────────────────
@@ -1711,9 +1724,10 @@ const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
       display: "flex", gap: 0, padding: "6px 4px calc(10px + env(safe-area-inset-bottom))",
-      background: "var(--surface)",
-      borderTop: "1.5px solid var(--border)",
-      boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+      background: "color-mix(in srgb, var(--surface) 90%, transparent)",
+      backdropFilter: "blur(16px) saturate(1.4)", WebkitBackdropFilter: "blur(16px) saturate(1.4)",
+      borderTop: "1px solid var(--border)",
+      boxShadow: "0 -10px 30px -14px rgba(0,0,0,0.4)",
       zIndex: 1000,
     }}>
       {tabs.map(t => {
@@ -1727,7 +1741,7 @@ const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
             fontSize: 16, transition: "all 0.18s", cursor: "pointer",
           }}>
             <span style={{ display:"flex", alignItems:"center", justifyContent:"center", transition: "all 0.18s", opacity: active ? 1 : 0.6, color: active ? "var(--sky)" : "var(--text2)" }}>{t.icon}</span>
-            <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: "0.03em" }}>{t.label}</span>
+            <span style={{ fontSize: 10, fontWeight: active ? 600 : 500, letterSpacing: "0.02em" }}>{t.label}</span>
           </button>
         );
       })}
@@ -1737,8 +1751,8 @@ const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
           padding: "6px 4px", borderRadius: 10, border: "none", flex: 1,
           background: "transparent", color: "var(--yellow)", transition: "all 0.18s", cursor: "pointer",
         }}>
-          <span style={{fontSize:18}}>⚡</span>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.03em" }}>Admin</span>
+          <IcoBolt s={18}/>
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.02em" }}>Admin</span>
         </button>
       )}
     </nav>
@@ -2509,7 +2523,7 @@ const MarksheetThemePicker = ({ showToast }) => {
           const on = k === key;
           const acc = t.accent || [14, 100, 180];
           return (
-            <button key={k} onClick={() => pick(k)} style={{ padding: 8, borderRadius: 12, textAlign: "center", border: `1.5px solid ${on ? "var(--sky)" : "var(--border)"}`, background: on ? "color-mix(in srgb,var(--sky) 10%,var(--surface2))" : "var(--surface2)" }}>
+            <button key={k} onClick={() => pick(k)} style={{ padding: 8, borderRadius: 12, textAlign: "center", border: `1px solid ${on ? "var(--sky)" : "var(--border)"}`, background: on ? "color-mix(in srgb,var(--sky) 10%,var(--surface2))" : "var(--surface2)" }}>
               <svg viewBox="0 0 60 78" width="100%" style={{ display: "block", borderRadius: 4 }}>
                 <rect width="60" height="78" fill="#fff" />
                 <rect x="1.5" y="1.5" width="57" height="75" fill="none" stroke={rgb(t.border)} strokeWidth="1.6" />
@@ -2530,7 +2544,7 @@ const MarksheetThemePicker = ({ showToast }) => {
         })}
       </div>
       <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10, lineHeight: 1.5 }}>Used for every marksheet PDF you download (single or ZIP) on this device. Classic tints the header by each student's grade.</div>
-      <Btn variant="sky" size="sm" onClick={preview} style={{ width: "100%" }}>👁 Preview sample marksheet</Btn>
+      <Btn variant="sky" size="sm" onClick={preview} style={{ width: "100%" }}><IcoEye s={14}/> Preview sample marksheet</Btn>
     </Card>
   );
 };
@@ -2562,9 +2576,9 @@ const InstallCard = ({ showToast }) => {
           : "Add EduGrade to your home screen for a full-screen app that opens instantly."}
         {" "}Marks you enter without internet are saved on the device and sync automatically when you reconnect.
       </div>
-      {!standalone && evt && <Btn onClick={install} style={{ width: "100%" }}>⬇ Install EduGrade</Btn>}
+      {!standalone && evt && <Btn onClick={install} style={{ width: "100%" }}><IcoDownload s={15}/> Install EduGrade</Btn>}
       {!standalone && !evt && (
-        <div style={{ fontSize: 11.5, color: "var(--text2)", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 12px", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 11.5, color: "var(--text2)", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 12px", lineHeight: 1.55 }}>
           {ios ? "On iPhone/iPad: tap the Share button, then “Add to Home Screen”." : "Open your browser menu (⋮) and choose “Install app” or “Add to Home screen”."}
         </div>
       )}
@@ -3251,12 +3265,12 @@ export default function Home() {
       <GlobalStyle dark={dark}/>
       {toast&&<Toast msg={toast}/>}
       {!online&&(
-        <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(76px + env(safe-area-inset-bottom))",zIndex:1500,background:"color-mix(in srgb,var(--yellow) 16%,var(--surface))",border:"1.5px solid color-mix(in srgb,var(--yellow) 40%,var(--border))",color:"var(--yellow)",padding:"7px 16px",borderRadius:30,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",animation:"fadeIn 0.25s ease"}}>📡 Offline · changes sync when you're back</div>
+        <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(76px + env(safe-area-inset-bottom))",zIndex:1500,background:"color-mix(in srgb,var(--yellow) 16%,var(--surface))",border:"1px solid color-mix(in srgb,var(--yellow) 40%,var(--border))",color:"var(--yellow)",padding:"7px 16px",borderRadius:30,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",animation:"fadeIn 0.25s ease",display:"flex",alignItems:"center",gap:7}}><IcoWifiOff s={14}/> Offline · changes sync when you're back</div>
       )}
       {splash&&<LogoSplash onDone={()=>setSplash(false)}/>}
       {confirmModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
-          <div style={{background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:20,padding:24,width:"100%",maxWidth:340,animation:"up 0.2s ease"}}>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:20,padding:24,width:"100%",maxWidth:340,animation:"up 0.2s ease"}}>
             <div style={{fontWeight:700,fontSize:16,marginBottom:8}}>{confirmModal.title}</div>
             <div style={{color:"var(--text2)",fontSize:13,marginBottom:20,lineHeight:1.5}}>{confirmModal.msg}</div>
             <div style={{display:"flex",gap:10}}>
@@ -3292,7 +3306,7 @@ export default function Home() {
                     Dashboard
                   </div>
                   <h1 style={{fontSize:26,fontWeight:800,letterSpacing:"-0.02em",marginBottom:3}}>
-                    Hi, {userData?.name||user.displayName||user.email.split("@")[0]} 👋
+                    Hi, {userData?.name||user.displayName||user.email.split("@")[0]}
                   </h1>
                   <p style={{color:"var(--text2)",fontSize:13}}>{user.email}</p>
                 </div>
@@ -3317,7 +3331,7 @@ export default function Home() {
                 </div>
 
                 {projectsLoading?([1,2].map(k=>(
-                  <div key={k} style={{background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:16,marginBottom:9,padding:"14px 16px",display:"flex",gap:14,alignItems:"center"}}>
+                  <div key={k} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:16,marginBottom:9,padding:"14px 16px",display:"flex",gap:14,alignItems:"center"}}>
                     <div style={{width:46,height:46,borderRadius:14,background:"var(--border)",flexShrink:0,animation:"pulse 1.5s ease-in-out infinite"}}/>
                     <div style={{flex:1}}>
                       <div style={{height:13,borderRadius:6,background:"var(--border)",marginBottom:9,width:"55%",animation:"pulse 1.5s ease-in-out infinite"}}/>
@@ -3335,9 +3349,9 @@ export default function Home() {
                   const pass=p.students.filter(s=>s.status==="PASS").length;
                   const passRate=p.students.length?((pass/p.students.length)*100).toFixed(0):0;
                   return(
-                    <div key={p.id} className="project-card" style={{background:"var(--surface)",border:"1.5px solid var(--border)",borderLeft:`3px solid ${["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]}`,borderRadius:16,marginBottom:9,overflow:"hidden"}}>
+                    <div key={p.id} className="project-card" style={{background:"var(--surface)",border:"1px solid var(--border)",borderLeft:`3px solid ${["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]}`,borderRadius:16,marginBottom:9,overflow:"hidden"}}>
                       <div style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px"}}>
-                        <div style={{width:46,height:46,borderRadius:14,flexShrink:0,background:`color-mix(in srgb,${["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]} 12%,var(--surface2))`,border:`1.5px solid color-mix(in srgb,${["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]} 20%,var(--border))`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <div style={{width:46,height:46,borderRadius:14,flexShrink:0,background:`color-mix(in srgb,${["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]} 12%,var(--surface2))`,border:`1px solid color-mix(in srgb,${["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]} 20%,var(--border))`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                           <IcoDoc s={22} c={["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]}/>
                         </div>
                         <div onClick={()=>{setActiveProjectIndex(i);setSubjectEntries(freshEntries(p));setViewStudent(null);go("app");}} style={{flex:1,cursor:"pointer"}}>
@@ -3356,12 +3370,12 @@ export default function Home() {
                       </div>
                       <div style={{display:p.shared?"none":"flex",borderTop:"1px solid var(--border)"}}>
                         {[
-                          {icon:"✏️",label:"Rename",action:()=>{setRenamingProject(p.id);setRenameValue(p.examName);}},
-                          {icon:"👥",label:"Share",action:()=>setShareModal(p)},
-                          {icon:"🗑",label:"Delete",action:()=>deleteProject(p.id),danger:true},
+                          {icon:<IcoPencil s={14}/>,label:"Rename",action:()=>{setRenamingProject(p.id);setRenameValue(p.examName);}},
+                          {icon:<IcoUsers s={14}/>,label:"Share",action:()=>setShareModal(p)},
+                          {icon:<IcoTrash s={14}/>,label:"Delete",action:()=>deleteProject(p.id),danger:true},
                         ].map(({icon,label,action,danger})=>(
                           <button key={label} onClick={e=>{e.stopPropagation();action();}} style={{flex:1,padding:"8px 2px",border:"none",background:"transparent",color:danger?"var(--red)":"var(--text2)",fontSize:10.5,fontWeight:600,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderRight:label!=="Delete"?"1px solid var(--border)":undefined}}>
-                            <span style={{fontSize:14}}>{icon}</span><span>{label}</span>
+                            <span style={{display:"flex"}}>{icon}</span><span>{label}</span>
                           </button>
                         ))}
                       </div>
@@ -3371,7 +3385,7 @@ export default function Home() {
 
                 {renamingProject&&(
                   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 20px"}}>
-                    <div style={{background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:20,padding:24,width:"100%",maxWidth:380}}>
+                    <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:20,padding:24,width:"100%",maxWidth:380}}>
                       <div style={{fontWeight:700,fontSize:16,marginBottom:16}}>Rename Project</div>
                       <input autoFocus value={renameValue} onChange={e=>setRenameValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&renameProject(renamingProject,renameValue)} placeholder="Project name" style={{marginBottom:14}}/>
                       <div style={{display:"flex",gap:10}}>
@@ -3430,7 +3444,7 @@ export default function Home() {
                           const ss=getSS(i);
                           const subFull=Number(ss.caFull)+((Number(ss.examPct)||70)/100)*Number(ss.examFull||100);
                           return(
-                            <div key={i} style={{background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",opacity:setupDragIdx===i?0.6:1}}>
+                            <div key={i} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",opacity:setupDragIdx===i?0.6:1}}>
                               <div style={{position:"absolute",top:0,left:0,width:3,height:"100%",background:"linear-gradient(180deg,var(--sky),var(--indigo))",opacity:0.6}}/>
                               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                                 <div onPointerDown={handleSetupPointerDown(i)} style={{cursor:"grab",touchAction:"none",fontSize:16,color:"var(--text3)",padding:"2px 4px",flexShrink:0,userSelect:"none"}}>⠿</div>
@@ -3540,17 +3554,17 @@ export default function Home() {
                       subtitle={[activeProject.institution,activeProject.className].filter(Boolean).join(" · ")||"Entry"}
                     />
                     <div style={{display:"flex",justifyContent:"flex-end",marginBottom:14,marginTop:-8}}>
-                      <button onClick={openReorderModal} style={{background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:10,padding:"6px 10px",fontSize:12,fontWeight:700,color:"var(--sky)",cursor:"pointer"}}>🔀 Reorder Subjects</button>
+                      <button onClick={openReorderModal} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:"6px 10px",fontSize:12,fontWeight:700,color:"var(--sky)",cursor:"pointer"}}>🔀 Reorder Subjects</button>
                     </div>
 
                     {reorderModalOpen && (
                       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999}} onClick={()=>setReorderModalOpen(false)}>
-                        <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface)",borderRadius:"20px 20px 0 0",padding:20,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto",border:"1.5px solid var(--border)",borderBottom:"none"}}>
+                        <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface)",borderRadius:"20px 20px 0 0",padding:20,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto",border:"1px solid var(--border)",borderBottom:"none"}}>
                           <div style={{fontWeight:800,fontSize:15,marginBottom:4}}>Reorder Subjects</div>
                           <div style={{fontSize:11.5,color:"var(--text2)",marginBottom:14}}>Drag ⠿ or use the arrows. This updates the order everywhere — entry page, marksheet, and every student already saved.</div>
                           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}} onPointerMove={handleReorderPointerMove} onPointerUp={handleReorderPointerUp} onPointerLeave={handleReorderPointerUp}>
                             {reorderList.map((item,i)=>(
-                              <div key={item.origIndex} style={{display:"flex",alignItems:"center",gap:10,background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:12,padding:"10px 12px",opacity:dragIdx===i?0.6:1}}>
+                              <div key={item.origIndex} style={{display:"flex",alignItems:"center",gap:10,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",opacity:dragIdx===i?0.6:1}}>
                                 <div onPointerDown={handleReorderPointerDown(i)} style={{cursor:"grab",touchAction:"none",fontSize:16,color:"var(--text3)",userSelect:"none"}}>⠿</div>
                                 <div style={{width:20,height:20,borderRadius:6,background:"color-mix(in srgb,var(--sky) 16%,var(--surface))",color:"var(--sky)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}</div>
                                 <div style={{flex:1,fontSize:13,fontWeight:600}}>{item.name}</div>
@@ -3599,7 +3613,7 @@ export default function Home() {
                           const subFull=Number(ss.caFull)+((Number(ss.examPct)||70)/100)*Number(ss.examFull||100);
 
                           return(
-                            <div key={si} style={{background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
+                            <div key={si} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
                               {/* Subject header */}
                               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:"1px solid var(--border)",background:"var(--surface3)"}}>
                                 <div style={{fontWeight:700,fontSize:13}}>{subName}</div>
@@ -3682,7 +3696,7 @@ export default function Home() {
                       const totalGP = (viewStudent.subjectResults||[]).reduce((s,r)=>s+(r.gp||0),0).toFixed(2);
                       const passCount = (viewStudent.subjectResults||[]).filter(r=>r.pass).length;
                       return (
-                      <Card style={{border:`1.5px solid color-mix(in srgb,${gradeColor(viewStudent.grade)} 28%,var(--border))`,background:`color-mix(in srgb,${gradeColor(viewStudent.grade)} 4%,var(--surface))`,animation:"up 0.25s ease",borderRadius:18,marginBottom:12}}>
+                      <Card style={{border:`1px solid color-mix(in srgb,${gradeColor(viewStudent.grade)} 28%,var(--border))`,background:`color-mix(in srgb,${gradeColor(viewStudent.grade)} 4%,var(--surface))`,animation:"up 0.25s ease",borderRadius:18,marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                           <div>
                             <div style={{fontWeight:800,fontSize:18,letterSpacing:"-0.02em"}}>{viewStudent.name}</div>
@@ -3704,7 +3718,7 @@ export default function Home() {
                             {label:"Merit",     value:`#${meritRanks[viewStudent.roll]||"—"}`,            color:"var(--yellow)",big:true},
                             {label:"Subjects Passed",value:`${passCount}/${subCount} Pass`,                color:"var(--green)",big:false},
                           ].map(({label,value,color,big})=>(
-                            <div key={label} style={{background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:14,padding:"13px 10px",textAlign:"center"}}>
+                            <div key={label} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:14,padding:"13px 10px",textAlign:"center"}}>
                               <div style={{fontSize:10,color:"var(--text2)",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>{label}</div>
                               <div style={{fontSize:big?26:18,fontWeight:800,color,fontFamily:"var(--font-mono)",lineHeight:1}}>{value}</div>
                             </div>
@@ -3721,7 +3735,7 @@ export default function Home() {
                                 const ss=activeProject.subjectSettings?.[i]||{caFull:30,examFull:100,examPct:70};
                                 const subFull=Number(ss.caFull)+((Number(ss.examPct)||70)/100)*Number(ss.examFull||100);
                                 return(
-                                  <div key={i} style={{background:"var(--surface2)",border:`1.5px solid ${sr.pass?"var(--border)":"color-mix(in srgb,var(--red) 20%,var(--border))"}`,borderRadius:11,padding:"10px 12px"}}>
+                                  <div key={i} style={{background:"var(--surface2)",border:`1px solid ${sr.pass?"var(--border)":"color-mix(in srgb,var(--red) 20%,var(--border))"}`,borderRadius:11,padding:"10px 12px"}}>
                                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                                       <span style={{fontWeight:700,fontSize:12.5}}>{subName}</span>
                                       <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -3763,7 +3777,7 @@ export default function Home() {
                             go("app");
                             showToast("✏ Edit mode — update marks and save");
                           }}>✏ Edit</Btn>
-                          <Btn onClick={()=>downloadMarksheet(viewStudent,activeProject,showToast)} style={{flex:1}} size="sm">📄 Marksheet</Btn>
+                          <Btn onClick={()=>downloadMarksheet(viewStudent,activeProject,showToast)} style={{flex:1}} size="sm"><IcoDoc s={14}/> Marksheet</Btn>
                           <Btn variant="danger" onClick={()=>deleteStudent(viewStudent.roll)} size="sm" style={{whiteSpace:"nowrap"}}>✕ Remove</Btn>
                         </div>
                       </Card>
@@ -3772,9 +3786,9 @@ export default function Home() {
 
                     {/* All Students Table */}
                     <Card style={{padding:0,borderRadius:18,overflow:"hidden"}}>
-                      <div style={{padding:"14px 16px",borderBottom:"1.5px solid var(--border)",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                      <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border)",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
                         <span>All Students ({activeProject.students.length})</span>
-                        {activeProject.students.length>0&&<Btn variant="sky" size="sm" onClick={()=>downloadAllMarksheetsZip(activeProject,showToast)}>📦 All Marksheets (ZIP)</Btn>}
+                        {activeProject.students.length>0&&<Btn variant="sky" size="sm" onClick={()=>downloadAllMarksheetsZip(activeProject,showToast)}><IcoZip s={14}/> All Marksheets (ZIP)</Btn>}
                       </div>
                       {activeProject.students.length===0?(
                         <div style={{textAlign:"center",padding:"40px 24px"}}>
@@ -3824,7 +3838,7 @@ export default function Home() {
                     <>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,overflowX:"auto"}}>
                         {projects.map((p,i)=>(
-                          <button key={p.id} onClick={()=>setActiveProjectIndex(i)} style={{whiteSpace:"nowrap",padding:"5px 12px",borderRadius:20,border:`1.5px solid ${i===activeProjectIndex?"var(--sky)":"var(--border)"}`,background:i===activeProjectIndex?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface)",color:i===activeProjectIndex?"var(--sky)":"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer"}}>{p.examName||p.id}</button>
+                          <button key={p.id} onClick={()=>setActiveProjectIndex(i)} style={{whiteSpace:"nowrap",padding:"5px 12px",borderRadius:20,border:`1px solid ${i===activeProjectIndex?"var(--sky)":"var(--border)"}`,background:i===activeProjectIndex?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface)",color:i===activeProjectIndex?"var(--sky)":"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer"}}>{p.examName||p.id}</button>
                         ))}
                       </div>
                       <SectionHeader label="Analytics" title="Stats" subtitle={`${activeProject.examName} · ${total} students`}/>
@@ -3884,7 +3898,7 @@ export default function Home() {
                         <Card style={{marginBottom:14,borderRadius:16}}>
                           <div style={{fontWeight:700,fontSize:13.5,marginBottom:14}}>Subject Performance</div>
                           {subStats.map((sub,i)=>(
-                            <div key={i} style={{padding:"10px 12px",borderRadius:11,marginBottom:8,background:"var(--surface2)",border:"1.5px solid var(--border)"}}>
+                            <div key={i} style={{padding:"10px 12px",borderRadius:11,marginBottom:8,background:"var(--surface2)",border:"1px solid var(--border)"}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                                 <div style={{fontWeight:600,fontSize:12.5}}>{sub.name}</div>
                                 <div style={{display:"flex",gap:8,fontSize:11,color:"var(--text2)"}}>
@@ -3899,14 +3913,14 @@ export default function Home() {
                                 <span>Lowest: {sub.lowest}</span><span>Highest: {sub.highest}</span>
                               </div>
                               <div style={{display:"flex",gap:8}}>
-                                <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:9,background:"color-mix(in srgb,var(--green) 8%,var(--surface))",border:"1.5px solid color-mix(in srgb,var(--green) 25%,var(--border))"}}>
+                                <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:9,background:"color-mix(in srgb,var(--green) 8%,var(--surface))",border:"1px solid color-mix(in srgb,var(--green) 25%,var(--border))"}}>
                                   <span style={{fontSize:11,color:"var(--text2)"}}>Passed: <b style={{color:"var(--green)",fontFamily:"var(--font-mono)"}}>{sub.passedStudents.length}</b></span>
                                   {sub.passedStudents.length>0&&<Btn variant="ghost" size="sm"
                                     onClick={()=>setStudentModal({title:`${sub.name} · Passed`,students:sub.passedStudents,color:"var(--green)"})}>
                                     View
                                   </Btn>}
                                 </div>
-                                <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:9,background:sub.failedStudents.length===0?"color-mix(in srgb,var(--green) 8%,var(--surface))":"color-mix(in srgb,var(--red) 8%,var(--surface))",border:`1.5px solid color-mix(in srgb,${sub.failedStudents.length===0?"var(--green)":"var(--red)"} 25%,var(--border))`}}>
+                                <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:9,background:sub.failedStudents.length===0?"color-mix(in srgb,var(--green) 8%,var(--surface))":"color-mix(in srgb,var(--red) 8%,var(--surface))",border:`1px solid color-mix(in srgb,${sub.failedStudents.length===0?"var(--green)":"var(--red)"} 25%,var(--border))`}}>
                                   <span style={{fontSize:11,color:"var(--text2)"}}>Failed: <b style={{color:sub.failedStudents.length===0?"var(--green)":"var(--red)",fontFamily:"var(--font-mono)"}}>{sub.failedStudents.length}</b></span>
                                   {sub.failedStudents.length>0&&<Btn variant="ghost" size="sm"
                                     onClick={()=>setStudentModal({title:`${sub.name} · Failed`,students:sub.failedStudents,color:"var(--red)"})}>
@@ -3983,16 +3997,16 @@ export default function Home() {
                   <>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,overflowX:"auto"}}>
                         {projects.map((p,i)=>(
-                          <button key={p.id} onClick={()=>setActiveProjectIndex(i)} style={{whiteSpace:"nowrap",padding:"5px 12px",borderRadius:20,border:`1.5px solid ${i===activeProjectIndex?"var(--sky)":"var(--border)"}`,background:i===activeProjectIndex?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface)",color:i===activeProjectIndex?"var(--sky)":"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer"}}>{p.examName||p.id}</button>
+                          <button key={p.id} onClick={()=>setActiveProjectIndex(i)} style={{whiteSpace:"nowrap",padding:"5px 12px",borderRadius:20,border:`1px solid ${i===activeProjectIndex?"var(--sky)":"var(--border)"}`,background:i===activeProjectIndex?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface)",color:i===activeProjectIndex?"var(--sky)":"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer"}}>{p.examName||p.id}</button>
                         ))}
                       </div>
                     <SectionHeader label="Rankings" title="Merit Table" subtitle={`${activeProject.examName} · sorted by ${meritSort==="merit"?"Merit":"Roll No."}`}/>
                     <div style={{display:"flex",gap:8,marginBottom:16,marginTop:-6}}>
-                      <button onClick={()=>setMeritSort("roll")} style={{flex:1,padding:"8px 0",borderRadius:12,border:`1.5px solid ${meritSort==="roll"?"var(--sky)":"var(--border)"}`,background:meritSort==="roll"?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface2)",color:meritSort==="roll"?"var(--sky)":"var(--text2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sort by Roll No.</button>
-                      <button onClick={()=>setMeritSort("merit")} style={{flex:1,padding:"8px 0",borderRadius:12,border:`1.5px solid ${meritSort==="merit"?"var(--sky)":"var(--border)"}`,background:meritSort==="merit"?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface2)",color:meritSort==="merit"?"var(--sky)":"var(--text2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sort by Merit</button>
+                      <button onClick={()=>setMeritSort("roll")} style={{flex:1,padding:"8px 0",borderRadius:12,border:`1px solid ${meritSort==="roll"?"var(--sky)":"var(--border)"}`,background:meritSort==="roll"?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface2)",color:meritSort==="roll"?"var(--sky)":"var(--text2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sort by Roll No.</button>
+                      <button onClick={()=>setMeritSort("merit")} style={{flex:1,padding:"8px 0",borderRadius:12,border:`1px solid ${meritSort==="merit"?"var(--sky)":"var(--border)"}`,background:meritSort==="merit"?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface2)",color:meritSort==="merit"?"var(--sky)":"var(--text2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sort by Merit</button>
                     </div>
                     {getTieGroups(activeProject.students).length>0&&(
-                      <button onClick={()=>setTieModalOpen(true)} style={{width:"100%",marginBottom:16,marginTop:-4,padding:"9px 0",borderRadius:12,border:"1.5px solid color-mix(in srgb,var(--amber) 35%,var(--border))",background:"color-mix(in srgb,var(--amber) 8%,var(--surface))",color:"var(--amber)",fontSize:12,fontWeight:700,cursor:"pointer"}}>⚖ Set merit for tied students ({getTieGroups(activeProject.students).length})</button>
+                      <button onClick={()=>setTieModalOpen(true)} style={{width:"100%",marginBottom:16,marginTop:-4,padding:"10px 0",display:"flex",alignItems:"center",justifyContent:"center",gap:7,borderRadius:12,border:"1px solid color-mix(in srgb,var(--amber) 35%,var(--border))",background:"color-mix(in srgb,var(--amber) 8%,var(--surface))",color:"var(--amber)",fontSize:12,fontWeight:700,cursor:"pointer"}}><IcoScale s={14}/> Set merit for tied students ({getTieGroups(activeProject.students).length})</button>
                     )}
                     {tieModalOpen&&<TieBreakModal students={activeProject.students} onClose={()=>setTieModalOpen(false)} onSave={saveTieOrder} saving={saving}/>}
                     {top3.length>0&&(
@@ -4005,7 +4019,7 @@ export default function Home() {
                             const mc=medalColors[idx];
                             const isFirst=idx===0;
                             return(
-                              <div key={s.roll} style={{flex:1,background:`color-mix(in srgb,${mc} 8%,var(--surface))`,border:`1.5px solid color-mix(in srgb,${mc} 28%,var(--border))`,borderRadius:16,padding:isFirst?"20px 10px 16px":"14px 10px 14px",textAlign:"center",transform:isFirst?"translateY(-6px)":"none",boxShadow:isFirst?`0 8px 24px color-mix(in srgb,${mc} 18%,transparent)`:"none"}}>
+                              <div key={s.roll} style={{flex:1,background:`color-mix(in srgb,${mc} 8%,var(--surface))`,border:`1px solid color-mix(in srgb,${mc} 28%,var(--border))`,borderRadius:16,padding:isFirst?"20px 10px 16px":"14px 10px 14px",textAlign:"center",transform:isFirst?"translateY(-6px)":"none",boxShadow:isFirst?`0 8px 24px color-mix(in srgb,${mc} 18%,transparent)`:"none"}}>
                                 <div style={{fontSize:isFirst?28:22,marginBottom:6}}>{medals[idx]}</div>
                                 <div style={{fontWeight:800,fontSize:12.5,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.01em"}}>{s.name}</div>
                                 <div style={{color:"var(--text2)",fontSize:10,marginBottom:8}}>Roll: {s.roll}</div>
@@ -4044,8 +4058,8 @@ export default function Home() {
                       </table>
                     </Card>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <Btn onClick={()=>downloadMeritListPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg">⬇ Download Merit List PDF</Btn>
-                      <Btn variant="sky" onClick={()=>downloadTabulationPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg">📊 Download Tabulation Sheet PDF</Btn>
+                      <Btn onClick={()=>downloadMeritListPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg"><IcoDownload s={15}/> Download Merit List PDF</Btn>
+                      <Btn variant="sky" onClick={()=>downloadTabulationPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg"><IcoBar s={15}/> Download Tabulation Sheet PDF</Btn>
                     </div>
                   </>
                 )}
