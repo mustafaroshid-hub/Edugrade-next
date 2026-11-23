@@ -1,7 +1,7 @@
 "use client";
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { useEffect, useState, useCallback, useRef } from "react";
 
 const FIREBASE_CONFIG = {
@@ -31,13 +31,41 @@ const makeGetGrade = (scale) => (g) => {
 };
 const getGP    = makeGetGP(null);
 const getGrade = makeGetGrade(null);
+// Keeps a typed mark between 0 and max (returns a string for the input box).
+const clampMark = (v, max) => {
+  if (v === "" || v == null) return "";
+  const n = Number(v);
+  if (Number.isNaN(n)) return "";
+  if (n < 0) return "0";
+  if (n > Number(max)) return String(max);
+  return v;
+};
 const gradeColor = (g) =>
   g === "A+" ? "#0ea5e9" : g === "A" ? "#0284c7" : g === "A-" ? "#0369a1"
   : g === "B" ? "#6366f1" : g === "C" ? "#f59e0b" : g === "D" ? "#fb923c" : "#ef4444";
 
+const rollCompare = (a, b) =>
+  String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true });
+
+// GPA ↓, total ↓, manual tieOrder ↑ (if set), then roll ↑ (lower roll = better merit)
+const meritCompare = (a, b) =>
+  (b.gpa - a.gpa) || (b.total - a.total) ||
+  ((a.tieOrder ?? 1e9) - (b.tieOrder ?? 1e9)) || rollCompare(a, b);
+
+const sortByMerit = (students) => [...students].sort(meritCompare);
+
+// Groups of students sharing the exact same GPA and total (the ones a tie-break applies to)
+const getTieGroups = (students) => {
+  const map = {};
+  students.forEach(s => { const k = `${s.gpa}|${Math.round(s.total)}`; (map[k] = map[k] || []).push(s); });
+  return Object.values(map)
+    .filter(g => g.length > 1)
+    .map(g => g.sort(meritCompare))
+    .sort((a, b) => meritCompare(a[0], b[0]));
+};
+
 const getMeritRank = (students) =>
-  [...students]
-    .sort((a, b) => b.gpa - a.gpa || b.total - a.total)
+  sortByMerit(students)
     .reduce((acc, s, i) => { acc[String(s.roll)] = i + 1; return acc; }, {});
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -140,6 +168,23 @@ const GlobalStyle = ({ dark }) => {
     .project-card { transition: all 0.2s; }
     .project-card:hover { border-color: color-mix(in srgb, var(--sky) 40%, var(--border)) !important; }
 
+    /* ── polish ── */
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: radial-gradient(70% 42% at 50% -8%, ${dark ? "rgba(14,165,233,0.11)" : "rgba(14,165,233,0.10)"}, transparent 70%);
+    }
+    ::selection { background: color-mix(in srgb, var(--sky) 30%, transparent); }
+    button { transition: transform 0.12s ease, filter 0.15s ease, background 0.18s, border-color 0.18s, opacity 0.18s; -webkit-tap-highlight-color: transparent; }
+    button:not(:disabled):hover { filter: brightness(1.07); }
+    button:not(:disabled):active { transform: scale(0.97); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+    .dock-btn[data-active="1"] { background: color-mix(in srgb, var(--sky) 11%, transparent) !important; }
+    tbody tr { transition: background 0.15s; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    }
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   `;
@@ -179,6 +224,7 @@ const Card = ({ children, style = {}, animate, glass }) => (
     borderRadius: 18,
     padding: 20,
     animation: animate ? "up 0.3s ease" : "none",
+    boxShadow: "0 10px 30px -18px rgba(0,0,0,0.45)",
     backdropFilter: glass ? "blur(16px)" : "none",
     ...style,
   }}>{children}</div>
@@ -250,7 +296,7 @@ const Pill = ({ children, color }) => (
 
 const Toast = ({ msg }) => (
   <div style={{
-    position: "fixed", top: 22, left: "50%", transform: "translateX(-50%)",
+    position: "fixed", top: "calc(18px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)",
     background: "var(--surface)", border: "1.5px solid var(--border)",
     color: "var(--text)", padding: "10px 22px", borderRadius: 40, fontSize: 13,
     fontWeight: 600, zIndex: 9999, boxShadow: "0 12px 40px rgba(0,0,0,0.28)",
@@ -393,6 +439,138 @@ const StudentListModal = ({ title, students, color, onClose }) => (
     </div>
   </div>
 );
+
+// ─── Tie-break modal: manually order students with identical GPA + total ─────
+const TieBreakModal = ({ students, onClose, onSave, saving }) => {
+  const [groups, setGroups] = useState(() => getTieGroups(students));
+  const [reset, setReset] = useState(false);
+  const rankOf = getMeritRank(students);
+
+  const move = (gi, i, dir) => {
+    setGroups(prev => prev.map((g, k) => {
+      if (k !== gi) return g;
+      const t = i + dir;
+      if (t < 0 || t >= g.length) return g;
+      const arr = [...g];
+      [arr[i], arr[t]] = [arr[t], arr[i]];
+      return arr;
+    }));
+    setReset(false);
+  };
+  const resetOrder = () => {
+    setGroups(prev => prev.map(g => [...g].sort(rollCompare)));
+    setReset(true);
+  };
+  const save = () => {
+    const updates = {};
+    groups.forEach(g => g.forEach((s, i) => { updates[String(s.roll)] = reset ? null : i; }));
+    onSave(updates);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 9999 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "82vh", overflowY: "auto", border: "1.5px solid var(--border)", borderBottom: "none" }}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Resolve Tied Merit</div>
+        <div style={{ fontSize: 11.5, color: "var(--text2)", marginBottom: 14, lineHeight: 1.5 }}>
+          Students with the same GPA and total are ranked by roll (lower roll first) unless you reorder them here. Use the arrows to decide who ranks higher. Editing a student's marks later clears their manual order.
+        </div>
+        {groups.length === 0 ? (
+          <div style={{ textAlign: "center", color: "var(--text2)", padding: "24px 0", fontSize: 13 }}>No tied students</div>
+        ) : groups.map((g, gi) => {
+          const base = Math.min(...g.map(s => rankOf[String(s.roll)] || 1));
+          return (
+            <div key={gi} style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+                <Pill color="var(--amber)">GPA {g[0].gpa}</Pill>
+                <Pill color="var(--sky)">Total {Math.round(g[0].total)}</Pill>
+                <span style={{ fontSize: 10.5, color: "var(--text2)" }}>{g.length} students tied</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {g.map((s, i) => (
+                  <div key={s.roll} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "9px 12px" }}>
+                    <div style={{ minWidth: 34, fontWeight: 800, fontSize: 13, color: "var(--yellow)", fontFamily: "var(--font-mono)" }}>#{base + i}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+                      <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {s.roll}</div>
+                    </div>
+                    <button onClick={() => move(gi, i, -1)} disabled={i === 0} style={{ background: "var(--surface3)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text2)", width: 28, height: 24, fontSize: 11, cursor: i === 0 ? "default" : "pointer", opacity: i === 0 ? 0.35 : 1 }}>▲</button>
+                    <button onClick={() => move(gi, i, 1)} disabled={i === g.length - 1} style={{ background: "var(--surface3)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text2)", width: 28, height: 24, fontSize: 11, cursor: i === g.length - 1 ? "default" : "pointer", opacity: i === g.length - 1 ? 0.35 : 1 }}>▼</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {groups.length > 0 && (
+          <button onClick={resetOrder} style={{ background: "none", border: "none", color: "var(--sky)", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 14, padding: 0 }}>↺ Reset all to roll order</button>
+        )}
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn variant="secondary" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>
+          <Btn onClick={save} loading={saving} disabled={groups.length === 0} style={{ flex: 1 }}>Save Merit Order</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Share modal: invite co-teachers by email ────────────────────────────────
+const ShareModal = ({ project, firebase, user, userData, showToast, onClose, onChanged }) => {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const list = project.collaborators || [];
+
+  const add = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return showToast("⚠ Go online to manage sharing");
+    const em = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return showToast("⚠ Enter a valid email");
+    if (em === (user.email || "").toLowerCase()) return showToast("⚠ That's your own email");
+    if (list.includes(em)) return showToast("⚠ Already shared with this email");
+    setBusy(true);
+    try {
+      await firebase.db.addCollaborator(user.uid, project.id, em, {
+        projectName: project.examName, ownerName: userData?.name || user.email,
+      });
+      onChanged([...list, em]); setEmail(""); showToast("✓ Shared with " + em);
+    } catch (e) { showToast("✗ " + (e.message || "Could not share")); }
+    setBusy(false);
+  };
+  const remove = async (em) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return showToast("⚠ Go online to manage sharing");
+    setBusy(true);
+    try {
+      await firebase.db.removeCollaborator(user.uid, project.id, em);
+      onChanged(list.filter(x => x !== em)); showToast("✓ Access removed");
+    } catch (e) { showToast("✗ " + (e.message || "Could not remove")); }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(6px)" }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "22px 22px 0 0", padding: 20, width: "100%", maxWidth: 480, maxHeight: "82vh", overflowY: "auto", border: "1.5px solid var(--border)", borderBottom: "none", animation: "up 0.25s ease" }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sky)", marginBottom: 4 }}>👥 Co-teachers</div>
+        <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.02em", marginBottom: 4 }}>{project.examName}</div>
+        <div style={{ fontSize: 11.5, color: "var(--text2)", marginBottom: 16, lineHeight: 1.55 }}>
+          Invited teachers sign in with their own EduGrade account (using this email) and see this project under Home as "Shared". They can enter and edit marks, but can't rename, delete or share it.
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <input type="email" placeholder="teacher@example.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+          <Btn onClick={add} loading={busy} style={{ whiteSpace: "nowrap" }}>Invite</Btn>
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text2)", marginBottom: 8 }}>Has access ({list.length})</div>
+        {list.length === 0 ? (
+          <div style={{ textAlign: "center", color: "var(--text2)", fontSize: 12.5, padding: "18px 0" }}>Not shared with anyone yet</div>
+        ) : list.map(em => (
+          <div key={em} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", marginBottom: 7 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--sky),var(--indigo))", color: "#fff", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{em[0].toUpperCase()}</div>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{em}</div>
+            <Btn variant="danger" size="sm" disabled={busy} onClick={() => remove(em)}>Remove</Btn>
+          </div>
+        ))}
+        <Btn variant="secondary" onClick={onClose} style={{ width: "100%", marginTop: 8 }}>Done</Btn>
+      </div>
+    </div>
+  );
+};
 
 // ─── Blocked Modal ────────────────────────────────────────────────────────────
 const BlockedModal = ({ onSignOut }) => (
@@ -814,7 +992,19 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
   };
 
   // ── Student CRUD ───────────────────────────────────────────────────────────────
-  const addStudent = async () => {
+  const addStudent = () => {
+    if (!activeProject) return;
+    if (!studentName.trim() || !roll.trim()) return showToast("⚠ Name & Roll required");
+    const rollKey = roll.trim();
+    const existing = activeProject.students.find(s => String(s.roll) === rollKey);
+    if (existing) {
+      setConfirmModal({ title: "Update Student?", msg: `Roll ${rollKey} (${existing.name}) is already saved. Replace the saved marks with these new ones?`, ok: "Update", variant: "primary", onOk: () => commitStudent() });
+      return;
+    }
+    commitStudent();
+  };
+
+  const commitStudent = async () => {
     if (!activeProject) return;
     if (!studentName.trim() || !roll.trim()) return showToast("⚠ Name & Roll required");
     const { gpa, grade, total, subResults, status } = calcStudent(subjectEntries, activeProject);
@@ -826,7 +1016,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
         const list = [...current];
         const idx = list.findIndex(s => s.roll === obj.roll);
         if (idx !== -1) {
-          if (!window.confirm("Student exists. Update?")) { confirmedUpdate = false; return current; }
+          
           list[idx] = obj;
         } else { list.push(obj); }
         return list;
@@ -836,7 +1026,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
       const updated = [...projects]; updated[activeProjectIndex] = pr;
       setProjects(updated); setViewStudent(obj);
       setStudentName(""); setRoll(""); setSubjectEntries(freshEntries(activeProject));
-      showToast("✓ Saved");
+      showToast(typeof navigator!=="undefined"&&!navigator.onLine?"✓ Saved offline — will sync":"✓ Saved");
     } catch (e) { showToast("✗ " + e.message); }
     setSaving(false);
   };
@@ -860,6 +1050,22 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
 
   // ── UI ─────────────────────────────────────────────────────────────────────────
   const [adminTab, setAdminTab] = useState("entry"); // "entry" | "stats" | "merit"
+  const [tieModalOpen, setTieModalOpen] = useState(false);
+  const saveTieOrder = async (updates) => {
+    setSaving(true);
+    try {
+      const next = await firebase.db.mutateStudents(uid, activeProject.id, (current) => current.map(s => {
+        const key = String(s.roll);
+        if (!(key in updates)) return s;
+        const copy = { ...s };
+        delete copy.tieOrder;
+        return updates[key] == null ? copy : { ...copy, tieOrder: updates[key] };
+      }));
+      const updated = [...projects]; updated[activeProjectIndex] = { ...activeProject, students: next };
+      setProjects(updated); setTieModalOpen(false); showToast("✓ Merit order updated");
+    } catch (e) { showToast("✗ " + e.message); }
+    setSaving(false);
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 5500, background: "var(--bg)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
@@ -890,7 +1096,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
             <div style={{ color: "var(--text2)", fontSize: 13, marginBottom: 20, lineHeight: 1.5 }}>{confirmModal.msg}</div>
             <div style={{ display: "flex", gap: 10 }}>
               <Btn variant="ghost" onClick={() => setConfirmModal(null)} style={{ flex: 1 }}>Cancel</Btn>
-              <Btn variant="danger" onClick={() => { setConfirmModal(null); confirmModal.onOk(); }} style={{ flex: 1 }}>{confirmModal.ok}</Btn>
+              <Btn variant={confirmModal.variant || "danger"} onClick={() => { setConfirmModal(null); confirmModal.onOk(); }} style={{ flex: 1 }}>{confirmModal.ok}</Btn>
             </div>
           </div>
         </div>
@@ -1140,7 +1346,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                                   value={(entry.assignments || [])[ai] ?? ""}
                                   onChange={e => setSubjectEntries(prev => prev.map((en, s) => {
                                     if (s !== si) return en;
-                                    const a = [...(en.assignments || [])]; a[ai] = e.target.value;
+                                    const a = [...(en.assignments || [])]; a[ai] = clampMark(e.target.value, aoof);
                                     return { ...en, assignments: a };
                                   }))}
                                   style={{ flex: 1, textAlign: "center" }} />
@@ -1149,21 +1355,38 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                             ))}
                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                               <span style={{ fontSize: 11.5, color: "var(--sky)", fontWeight: 600, minWidth: 90 }}>MCQ / Oral</span>
-                              <input type="number" placeholder="0" min={0} value={entry.mcq ?? ""} onChange={e => setSubjectEntries(prev => prev.map((en, s) => s === si ? { ...en, mcq: e.target.value } : en))} style={{ flex: 1, textAlign: "center" }} />
+                              <input type="number" placeholder="0" min={0} value={entry.mcq ?? ""} onChange={e => setSubjectEntries(prev => prev.map((en, s) => s === si ? { ...en, mcq: clampMark(e.target.value, ss.examFull || 100) } : en))} style={{ flex: 1, textAlign: "center" }} />
                               <span style={{ fontSize: 11, color: "var(--text3)", minWidth: 28 }}>/{ss.examFull || 100}</span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                               <span style={{ fontSize: 11.5, color: "var(--amber)", fontWeight: 600, minWidth: 90 }}>CQ / Written</span>
-                              <input type="number" placeholder="0" min={0} value={entry.cq ?? ""} onChange={e => setSubjectEntries(prev => prev.map((en, s) => s === si ? { ...en, cq: e.target.value } : en))} style={{ flex: 1, textAlign: "center" }} />
+                              <input type="number" placeholder="0" min={0} value={entry.cq ?? ""} onChange={e => setSubjectEntries(prev => prev.map((en, s) => s === si ? { ...en, cq: clampMark(e.target.value, ss.examFull || 100) } : en))} style={{ flex: 1, textAlign: "center" }} />
                               <span style={{ fontSize: 11, color: "var(--text3)", minWidth: 28 }}>/{ss.examFull || 100}</span>
                             </div>
-                            <div style={{ fontSize: 11, color: "var(--text2)", display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--border)" }}>
-                              <span>Assign: <b style={{ color: "var(--indigo)", fontFamily: "var(--font-mono)" }}>{r.assignTotal}/{na * aoof}</b></span>
-                              <span>CA: <b style={{ color: "var(--indigo)", fontFamily: "var(--font-mono)" }}>{r.ca}</b></span>
-                              <span>MCQ+CQ: <b style={{ color: "var(--sky)", fontFamily: "var(--font-mono)" }}>{r.rawExam}</b></span>
-                              <span>B: <b style={{ color: "var(--amber)", fontFamily: "var(--font-mono)" }}>{r.b}</b></span>
-                              <span>Total: <b style={{ color: "var(--green)", fontFamily: "var(--font-mono)" }}>{r.ab}/{Math.round(subFull)}</b></span>
-                            </div>
+                            <div style={{borderTop:"1px solid var(--border)",paddingTop:9,marginTop:2}}>
+                                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                                    {[
+                                      {l:"Assign",v:`${r.assignTotal}/${na*aoof}`,c:"#818cf8"},
+                                      {l:"CA",v:r.ca,c:"#818cf8"},
+                                      {l:"Exam",v:r.rawExam,c:"var(--sky)"},
+                                      {l:"B",v:r.b,c:"var(--amber)"},
+                                    ].map(({l,v,c})=>(
+                                      <div key={l} style={{background:`color-mix(in srgb,${c} 10%,var(--surface))`,border:`1px solid color-mix(in srgb,${c} 24%,var(--border))`,borderRadius:10,padding:"6px 4px",textAlign:"center"}}>
+                                        <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.09em",textTransform:"uppercase",color:"var(--text2)",marginBottom:3}}>{l}</div>
+                                        <div style={{fontSize:12.5,fontWeight:800,color:c,fontFamily:"var(--font-mono)",lineHeight:1.1}}>{v}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{marginTop:10}}>
+                                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+                                      <span style={{fontSize:10.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text2)"}}>Total <b style={{color:"var(--green)",fontFamily:"var(--font-mono)",fontSize:13,letterSpacing:0}}>{r.ab}/{Math.round(r.subFull)}</b></span>
+                                      <span style={{fontSize:13,fontWeight:800,fontFamily:"var(--font-mono)",color:(r.pct>=0&&r.pct<(activeProject.passThreshold??33))?"var(--red)":"var(--green)"}}>{r.pct.toFixed(1)}%</span>
+                                    </div>
+                                    <div style={{height:4,borderRadius:2,background:"var(--border)",overflow:"hidden"}}>
+                                      <div style={{height:4,borderRadius:2,width:`${Math.min(r.pct,100)}%`,background:(r.pct<(activeProject.passThreshold??33))?"var(--red)":"var(--green)",transition:"width 0.4s ease"}}/>
+                                    </div>
+                                  </div>
+                                </div>
                           </div>
                         </div>
                       );
@@ -1175,8 +1398,9 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                 {/* Student list */}
                 {sortedByRoll.length > 0 && (
                   <Card style={{ padding: 0, borderRadius: 18, overflow: "hidden", marginBottom: 14 }}>
-                    <div style={{ padding: "14px 16px 10px", fontWeight: 700, fontSize: 13, borderBottom: "1px solid var(--border)" }}>
-                      Students ({sortedByRoll.length})
+                    <div style={{ padding: "14px 16px 10px", fontWeight: 700, fontSize: 13, borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <span>Students ({sortedByRoll.length})</span>
+                      <Btn variant="sky" size="sm" onClick={() => downloadAllMarksheetsZip(activeProject, showToast)}>📦 All Marksheets (ZIP)</Btn>
                     </div>
                     {sortedByRoll.map(s => {
                       const rank = meritRanks[s.roll];
@@ -1245,7 +1469,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
               const pass = activeProject.students.filter(s => s.status === "PASS").length;
               const fail = activeProject.students.length - pass;
               const avgGPA = (activeProject.students.reduce((a, s) => a + s.gpa, 0) / activeProject.students.length).toFixed(2);
-              const topStudent = [...activeProject.students].sort((a, b) => b.gpa - a.gpa)[0];
+              const topStudent = sortByMerit(activeProject.students)[0];
               const gradeDist = activeProject.students.reduce((acc, s) => { acc[s.grade] = (acc[s.grade] || 0) + 1; return acc; }, {});
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1295,12 +1519,16 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <button onClick={() => setPage("home")} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "var(--text2)", cursor: "pointer" }}>← Projects</button>
               <div style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{activeProject.examName} · Merit</div>
+              {getTieGroups(activeProject.students).length > 0 && (
+                <button onClick={() => setTieModalOpen(true)} style={{ background: "color-mix(in srgb,var(--amber) 10%,var(--surface))", border: "1.5px solid color-mix(in srgb,var(--amber) 35%,var(--border))", borderRadius: 10, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, color: "var(--amber)", cursor: "pointer", flexShrink: 0 }}>⚖ Ties ({getTieGroups(activeProject.students).length})</button>
+              )}
+              {tieModalOpen && <TieBreakModal students={activeProject.students} onClose={() => setTieModalOpen(false)} onSave={saveTieOrder} saving={saving} />}
             </div>
             {activeProject.students.length === 0 ? (
               <div style={{ textAlign: "center", color: "var(--text2)", padding: "60px 0" }}>No students yet</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[...activeProject.students].sort((a, b) => b.gpa - a.gpa || b.total - a.total).map((s, idx) => {
+                {sortByMerit(activeProject.students).map((s, idx) => {
                   const rank = idx + 1;
                   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
                   return (
@@ -1426,7 +1654,7 @@ const AdminPanel = ({ firebase, showToast, onClose }) => {
               <div style={{ textAlign:"center",fontSize:36,marginBottom:14 }}>🔒</div>
               <div style={{ fontWeight:800,fontSize:16,textAlign:"center",marginBottom:8 }}>Firestore Permission Denied</div>
               <p style={{ color:"var(--text2)",fontSize:12.5,lineHeight:1.7,marginBottom:16,textAlign:"center" }}>Update your Firestore rules in Firebase Console:</p>
-              <div style={{ background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:12,padding:"14px 16px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--sky)",lineHeight:1.9,whiteSpace:"pre-wrap",userSelect:"all" }}>{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAdmin() {\n      return request.auth != null &&\n        request.auth.token.email == "${ADMIN_EMAIL}";\n    }\n    match /users/{userId} {\n      allow read, write: if request.auth.uid == userId || isAdmin();\n      match /projects/{projectId} {\n        allow read, write: if request.auth.uid == userId || isAdmin();\n      }\n    }\n    match /adminNotifications/{docId} {\n      allow read, write: if isAdmin() || request.auth != null;\n    }\n  }\n}`}</div>
+              <div style={{ background:"var(--surface2)",border:"1.5px solid var(--border)",borderRadius:12,padding:"14px 16px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--sky)",lineHeight:1.9,whiteSpace:"pre-wrap",userSelect:"all" }}>{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAdmin() {\n      return request.auth != null &&\n        request.auth.token.email == "${ADMIN_EMAIL}";\n    }\n    match /users/{userId} {\n      allow read, write: if request.auth.uid == userId || isAdmin();\n      match /projects/{projectId} {\n        function isCollab() {\n          return request.auth != null && request.auth.token.email != null &&\n            request.auth.token.email.lower() in resource.data.get('collaborators', []);\n        }\n        allow read: if request.auth.uid == userId || isAdmin() || isCollab();\n        allow create, delete: if request.auth.uid == userId || isAdmin();\n        allow update: if request.auth.uid == userId || isAdmin() ||\n          (isCollab() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['students', 'subjectNames', 'subjectSettings']));\n      }\n    }\n    match /adminNotifications/{docId} {\n      allow read, update, delete: if isAdmin();\n      allow create: if request.auth != null;\n    }\n    match /sharedProjects/{shareId} {\n      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;\n      allow read: if request.auth != null && (resource.data.ownerUid == request.auth.uid || resource.data.email == request.auth.token.email) || isAdmin();\n      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid || isAdmin();\n    }\n  }\n}`}</div>
               <Btn onClick={onClose} style={{ width:"100%",marginTop:16 }} variant="secondary">Close</Btn>
             </div>
           ) : filteredUsers.length === 0 ? (
@@ -1482,7 +1710,7 @@ const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
   return (
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
-      display: "flex", gap: 0, padding: "6px 4px 10px",
+      display: "flex", gap: 0, padding: "6px 4px calc(10px + env(safe-area-inset-bottom))",
       background: "var(--surface)",
       borderTop: "1.5px solid var(--border)",
       boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
@@ -1491,7 +1719,7 @@ const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
       {tabs.map(t => {
         const active = page === t.id;
         return (
-          <button key={t.id} onClick={() => go(t.id)} style={{
+          <button key={t.id} className="dock-btn" data-active={active ? "1" : "0"} onClick={() => go(t.id)} style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
             padding: "6px 4px", borderRadius: 10, border: "none", flex: 1,
             background: "transparent",
@@ -1516,8 +1744,23 @@ const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
     </nav>
   );
 };
+// ─── Marksheet themes (stored per device in localStorage) ────────────────────
+const MARKSHEET_THEMES = {
+  classic: { label: "Classic", accent: null, strip1: null, strip2: null, border: [0, 0, 0], headFill: [255, 255, 255], headText: [15, 28, 46], zebra: [255, 255, 255], value: [14, 100, 180] },
+  ocean:   { label: "Ocean",   accent: [3, 105, 161], strip1: [14, 165, 233], strip2: [125, 211, 252], border: [3, 105, 161], headFill: [3, 105, 161], headText: [255, 255, 255], zebra: [240, 249, 255], value: [3, 105, 161] },
+  emerald: { label: "Emerald", accent: [4, 120, 87], strip1: [16, 185, 129], strip2: [110, 231, 183], border: [4, 120, 87], headFill: [4, 120, 87], headText: [255, 255, 255], zebra: [236, 253, 245], value: [4, 120, 87] },
+  royal:   { label: "Royal",   accent: [67, 56, 202], strip1: [99, 102, 241], strip2: [165, 180, 252], border: [67, 56, 202], headFill: [67, 56, 202], headText: [255, 255, 255], zebra: [238, 242, 255], value: [67, 56, 202], innerFrame: true },
+  crimson: { label: "Crimson", accent: [159, 18, 57], strip1: [225, 29, 72], strip2: [253, 164, 175], border: [159, 18, 57], headFill: [159, 18, 57], headText: [255, 255, 255], zebra: [255, 241, 242], value: [159, 18, 57] },
+  mono:    { label: "Mono",    accent: [0, 0, 0], strip1: [0, 0, 0], strip2: [150, 150, 150], border: [0, 0, 0], headFill: [230, 230, 230], headText: [0, 0, 0], zebra: [255, 255, 255], value: [0, 0, 0] },
+};
+const getMarksheetThemeKey = () => {
+  try { const k = localStorage.getItem("edu_ms_theme"); return MARKSHEET_THEMES[k] ? k : "classic"; }
+  catch { return "classic"; }
+};
+const getMarksheetTheme = () => MARKSHEET_THEMES[getMarksheetThemeKey()];
+
 // ─── PDF: Marksheet ───────────────────────────────────────────────────────────
-const downloadMarksheet = async (student, project, showToast) => {
+const downloadMarksheet = async (student, project, showToast, opts = {}) => {
   if (!student) return showToast("⚠ No student selected");
   showToast("⏳ Generating marksheet…");
 
@@ -1537,6 +1780,7 @@ const downloadMarksheet = async (student, project, showToast) => {
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
 
+  const T = getMarksheetTheme();
   const BLACK  = [0, 0, 0];
   const WHITE  = [255, 255, 255];
   const LGREY  = [245, 245, 245];
@@ -1549,7 +1793,9 @@ const downloadMarksheet = async (student, project, showToast) => {
   // ── Outer border ─────────────────────────────────────────────────────────────
   doc.setDrawColor(...BLACK);
   doc.setLineWidth(1.2);
+  doc.setDrawColor(...T.border);
   doc.rect(8, 8, W - 16, H - 16, "S");
+  if (T.innerFrame) { doc.setLineWidth(0.3); doc.rect(10.2, 10.2, W - 20.4, H - 20.4, "S"); doc.setLineWidth(1.2); }
 
   // ── Header: Institution name ──────────────────────────────────────────────────
   const institution = project.institution || "Institution";
@@ -1557,18 +1803,18 @@ const downloadMarksheet = async (student, project, showToast) => {
   const className   = project.className   || "";
 
   // Grade-based color accent
-  const gradeAccent = student.hasZeroGP ? [220,38,38] :
+  const gradeAccent = student.status === "FAIL" ? [220,38,38] :
     student.grade==="A+"||student.grade==="A" ? [5,150,105] :
     student.grade==="A-"||student.grade==="B" ? [14,100,180] :
     student.grade==="C" ? [180,130,0] : [107,114,128];
   // Top color strip
-  doc.setFillColor(...gradeAccent.map(v=>Math.min(255,Math.round(v*0.8+150))));
+  doc.setFillColor(...(T.strip1 || gradeAccent.map(v=>Math.min(255,Math.round(v*0.8+150)))));
   doc.rect(0,0,W,3,"F");
-  doc.setFillColor(...gradeAccent.map(v=>Math.min(255,Math.round(v*0.6+170))));
+  doc.setFillColor(...(T.strip2 || gradeAccent.map(v=>Math.min(255,Math.round(v*0.6+170)))));
   doc.rect(0,3,W,1.5,"F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.setTextColor(...gradeAccent);
+  doc.setTextColor(...(T.accent || gradeAccent));
   doc.text(institution, W / 2, 21, { align: "center" });
 
   doc.setFont("helvetica", "normal");
@@ -1590,7 +1836,7 @@ const downloadMarksheet = async (student, project, showToast) => {
   ];
   const gx = W - 70, gy = 12, gw = 60, gh = 5;
   doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...DARK);
-  doc.text("Grace Interval", gx + gw / 2, gy + 4, { align: "center" });
+  doc.text("Grade Interval", gx + gw / 2, gy + 4, { align: "center" });
   // header row
   doc.setDrawColor(...MGREY); doc.setLineWidth(0.3);
   doc.rect(gx, gy + 5.5, gw, gh, "FD");
@@ -1700,17 +1946,17 @@ const downloadMarksheet = async (student, project, showToast) => {
       lineWidth: 0.3,
     },
     headStyles: {
-      fillColor: WHITE,
-      textColor: DARK,
+      fillColor: T.headFill,
+      textColor: T.headText,
       fontStyle: "bold",
       fontSize: 7,
       cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
       halign: "center",
       valign: "middle",
-      lineColor: BLACK,
+      lineColor: T.border,
       lineWidth: 0.4,
     },
-    alternateRowStyles: { fillColor: WHITE },
+    alternateRowStyles: { fillColor: T.zebra },
     columnStyles: {
       0: { cellWidth: 'auto', fontStyle: "bold" },
       1: { halign: "center", cellWidth: 14 },
@@ -1735,7 +1981,7 @@ const downloadMarksheet = async (student, project, showToast) => {
       }
     },
     margin: { left: 10, right: 10 },
-    tableLineColor: BLACK,
+    tableLineColor: T.border,
     tableLineWidth: 0.5,
   });
 
@@ -1759,6 +2005,7 @@ const downloadMarksheet = async (student, project, showToast) => {
   ].forEach(({ label, value, large }, i) => {
     const tx = 10 + i * sumW;
     doc.setDrawColor(...BLACK); doc.setLineWidth(0.4);
+    doc.setDrawColor(...T.border);
     doc.rect(tx, rsY, sumW, 20, "S");
     doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...DARK);
     doc.text(label, tx + sumW / 2, rsY + 5, { align: "center" });
@@ -1766,7 +2013,7 @@ const downloadMarksheet = async (student, project, showToast) => {
     doc.line(tx + 6, rsY + 8, tx + sumW - 6, rsY + 8);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(large ? 14 : 11);
-    if (large) doc.setTextColor(14, 100, 180); else doc.setTextColor(...DARK);
+    if (large) doc.setTextColor(...T.value); else doc.setTextColor(...DARK);
     doc.text(value, tx + sumW / 2, rsY + 16, { align: "center" });
   });
 
@@ -1781,6 +2028,7 @@ const downloadMarksheet = async (student, project, showToast) => {
   gpCols.forEach(({ label, value }, i) => {
     const tx = 10 + i * gpW;
     doc.setDrawColor(...BLACK); doc.setLineWidth(0.4);
+    doc.setDrawColor(...T.border);
     doc.rect(tx, gpRowY, gpW, 20, "S");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
@@ -1788,7 +2036,7 @@ const downloadMarksheet = async (student, project, showToast) => {
     doc.text(label, tx + gpW / 2, gpRowY + 6, { align: "center" });
     doc.setDrawColor(...MGREY); doc.setLineWidth(0.3);
     doc.line(tx + 8, gpRowY + 10, tx + gpW - 8, gpRowY + 10);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(14, 100, 180);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...T.value);
     doc.text(value, tx + gpW / 2, gpRowY + 17, { align: "center" });
   });
 
@@ -1801,8 +2049,54 @@ const downloadMarksheet = async (student, project, showToast) => {
   doc.text("Student Signature", 42, sigY + 5, { align: "center" });
   doc.text("Authorized Signature", W - 42, sigY + 5, { align: "center" });
 
-  doc.save(`${student.name.replace(/\s+/g, "_")}_Marksheet.pdf`);
+  const fileName = `${student.name.replace(/\s+/g, "_")}_Marksheet.pdf`;
+  if (opts.returnBlob) return { blob: doc.output("blob"), fileName };
+  doc.save(fileName);
   showToast("✓ Marksheet downloaded!");
+};
+
+// ─── ZIP: every student's marksheet as its own PDF ───────────────────────────
+let _zipBusy = false;
+const downloadAllMarksheetsZip = async (project, showToast) => {
+  if (!project?.students?.length) return showToast("⚠ No students to export");
+  if (_zipBusy) return;
+  _zipBusy = true;
+  try {
+    showToast("⏳ Preparing ZIP…");
+    const loadScript = (src) => new Promise((res, rej) => {
+      if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
+      const s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+    const zip = new window.JSZip();
+    const list = [...project.students].sort((a, b) =>
+      String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true }));
+    const noop = () => {};
+    const clean = (t) => String(t).replace(/[\\/:*?"<>|]+/g, "");
+    let done = 0;
+    for (let i = 0; i < list.length; i++) {
+      showToast(`⏳ Marksheet ${i + 1} of ${list.length}…`);
+      const res = await downloadMarksheet(list[i], project, noop, { returnBlob: true });
+      if (!res) continue;
+      zip.file(`${clean(list[i].roll)}_${clean(res.fileName)}`, res.blob);
+      done++;
+    }
+    if (!done) { showToast("✗ Could not build marksheets"); return; }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(project.examName || "Exam").replace(/\s+/g, "_")}_Marksheets.zip`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast(`✓ ${done} marksheet${done !== 1 ? "s" : ""} zipped!`);
+  } catch (e) {
+    showToast("✗ " + (e?.message || "ZIP failed"));
+  } finally {
+    _zipBusy = false;
+  }
 };
 
 // ─── PDF: Merit List — FIXED & Improved ──────────────────────────────────────
@@ -1942,7 +2236,7 @@ const downloadMeritListPDF = async (project, showToast, sortMode = "roll") => {
 
   // ── Table — FIX: explicit column widths prevent header text wrapping ───────
   const sortedRows = sortMode === "merit"
-    ? [...project.students].sort((a, b) => b.gpa - a.gpa || b.total - a.total)
+    ? sortByMerit(project.students)
     : [...project.students].sort((a, b) =>
         String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true })
       );
@@ -2071,6 +2365,213 @@ const downloadMeritListPDF = async (project, showToast, sortMode = "roll") => {
   doc.save(`${project.examName.replace(/\s+/g, "_")}_Merit_List.pdf`);
   showToast("✓ Merit List PDF downloaded!");
 };
+// ─── PDF: Subject tabulation sheet (all students x all subjects) ─────────────
+const downloadTabulationPDF = async (project, showToast, sortMode = "roll") => {
+  if (!project?.students?.length) return showToast("⚠ No students to export");
+  showToast("⏳ Generating tabulation sheet…");
+
+  const loadScript = (src) => new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  try {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+  } catch { return showToast("✗ Could not load PDF library"); }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+
+  const SKY = [14, 165, 233], SKY_DK = [3, 105, 161], SKY_LT = [240, 249, 255];
+  const DARK = [15, 28, 46], GREY = [100, 116, 132], RED = [239, 68, 68], WHITE = [255, 255, 255];
+
+  const n = project.subjectCount || (project.subjectNames || []).length || 0;
+  const names = Array.from({ length: n }, (_, i) => project.subjectNames?.[i] || `Subject ${i + 1}`);
+  const fullMarks = names.map((_, i) => {
+    const ss = project.subjectSettings?.[i] || { caFull: 30, examFull: 100, examPct: 70 };
+    return Math.round((ss.caFull || 30) + ((ss.examPct || 70) / 100) * (ss.examFull || 100));
+  });
+  const ranks = getMeritRank(project.students);
+  const rows = sortMode === "merit" ? sortByMerit(project.students) : [...project.students].sort(rollCompare);
+  const srOf = (s, i) => (s.subjectResults || [])[i];
+
+  // ── header ──
+  doc.setFillColor(...SKY_DK); doc.rect(0, 0, W / 2, 4, "F");
+  doc.setFillColor(...SKY);    doc.rect(W / 2, 0, W / 2, 4, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...DARK);
+  doc.text(project.institution || "EduGrade", 10, 13);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...GREY);
+  doc.text(`Tabulation Sheet  ·  ${project.examName}${project.className ? "  ·  " + project.className : ""}`, 10, 19);
+  const generatedOn = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  doc.text(`${rows.length} students  ·  Sorted by ${sortMode === "merit" ? "Merit" : "Roll No."}  ·  ${generatedOn}`, W - 10, 19, { align: "right" });
+
+  // ── per-subject stats ──
+  const col = (i) => rows.map(s => srOf(s, i)).filter(Boolean);
+  const highest = names.map((_, i) => { const c = col(i); return c.length ? String(Math.round(Math.max(...c.map(r => r.ab)))) : "-"; });
+  const average = names.map((_, i) => { const c = col(i); return c.length ? (c.reduce((a, r) => a + r.ab, 0) / c.length).toFixed(1) : "-"; });
+  const passPct = names.map((_, i) => { const c = col(i); return c.length ? Math.round((c.filter(r => r.pass).length / c.length) * 100) + "%" : "-"; });
+  const totals = rows.map(s => Math.round(s.total));
+  const overallPass = Math.round((rows.filter(s => s.status === "PASS").length / rows.length) * 100);
+
+  const head = [["Roll", "Name", ...names.map((nm, i) => `${nm}\n(${fullMarks[i]})`), "Total", "GPA", "Grade", "Merit"]];
+  const body = rows.map(s => [
+    s.roll, s.name,
+    ...names.map((_, i) => { const r = srOf(s, i); return r ? String(Math.round(r.ab)) : "-"; }),
+    Math.round(s.total), s.gpa, s.grade, `#${ranks[s.roll]}`,
+  ]);
+  const foot = [
+    [{ content: "Highest", colSpan: 2 }, ...highest, String(Math.max(...totals)), String(Math.max(...rows.map(s => s.gpa))), "", ""],
+    [{ content: "Average", colSpan: 2 }, ...average, (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(1), (rows.reduce((a, s) => a + s.gpa, 0) / rows.length).toFixed(2), "", ""],
+    [{ content: "Pass %", colSpan: 2 }, ...passPct, { content: `Overall ${overallPass}%`, colSpan: 4 }],
+  ];
+
+  const fs = n > 14 ? 6 : n > 10 ? 7 : 8;
+  const columnStyles = { 0: { halign: "center", cellWidth: 12 }, 1: { cellWidth: n > 12 ? 30 : 40 } };
+  for (let c = 2; c < n + 6; c++) columnStyles[c] = { halign: "center" };
+
+  doc.autoTable({
+    head, body: [...body, ...foot], startY: 24, margin: { left: 8, right: 8, bottom: 14 },
+    styles: { font: "helvetica", fontSize: fs, cellPadding: 1.8, textColor: DARK, lineColor: [210, 220, 232], lineWidth: 0.15, overflow: "linebreak" },
+    headStyles: { fillColor: SKY, textColor: WHITE, fontStyle: "bold", fontSize: fs - 0.5, halign: "center", valign: "middle" },
+    alternateRowStyles: { fillColor: [248, 251, 254] },
+    columnStyles,
+    didParseCell: (d) => {
+      if (d.section !== "body") return;
+      const ri = d.row.index, ci = d.column.index;
+      if (ri >= rows.length) {
+        d.cell.styles.fontStyle = "bold"; d.cell.styles.fillColor = SKY_LT; d.cell.styles.textColor = SKY_DK;
+        return;
+      }
+      const s = rows[ri];
+      if (ci >= 2 && ci < 2 + n) {
+        const r = srOf(s, ci - 2);
+        if (r && !r.pass) { d.cell.styles.textColor = RED; d.cell.styles.fontStyle = "bold"; }
+      }
+      if (ci === n + 4) { d.cell.styles.fontStyle = "bold"; d.cell.styles.textColor = s.status === "FAIL" ? RED : SKY_DK; }
+      if (ci === n + 2 || ci === n + 5) d.cell.styles.fontStyle = "bold";
+    },
+  });
+
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GREY);
+    doc.text("Red marks = failed subject", 8, H - 5);
+    doc.text(`EduGrade  ·  Page ${i} of ${pageCount}`, W - 8, H - 5, { align: "right" });
+  }
+  doc.save(`${project.examName.replace(/\s+/g, "_")}_Tabulation_Sheet.pdf`);
+  showToast("✓ Tabulation sheet downloaded!");
+};
+
+// ─── Settings cards: marksheet theme picker + install app ─────────────────────
+const makeSampleMarksheet = () => {
+  const sub = (ab) => {
+    const ca = 26, b = ab - ca, rawExam = Math.round(b / 0.7), mcq = Math.round(rawExam * 0.4);
+    const gp = ab >= 80 ? 5 : ab >= 70 ? 4 : ab >= 60 ? 3.5 : 3;
+    const grade = gp === 5 ? "A+" : gp === 4 ? "A" : gp === 3.5 ? "A-" : "B";
+    return { ca, mcq, cq: rawExam - mcq, rawExam, b, ab, subFull: 100, pct: ab, assignTotal: 52, assignments: [18, 17, 17], gp, grade, pass: true };
+  };
+  const subjectResults = [82, 76, 91, 68, 74].map(sub);
+  const gpa = parseFloat((subjectResults.reduce((s, r) => s + r.gp, 0) / subjectResults.length).toFixed(2));
+  const student = {
+    name: "Sample Student", roll: "01", gpa, grade: "A", status: "PASS",
+    total: subjectResults.reduce((s, r) => s + r.ab, 0), subjectResults,
+    finalMarks: subjectResults.map(r => r.ab),
+  };
+  const project = {
+    institution: "Sample High School", className: "Class 6", examName: "Annual Exam",
+    subjectCount: 5, subjectNames: ["Bangla", "English", "Mathematics", "Science", "Social Science"],
+    subjectSettings: Array(5).fill(null).map(() => ({ caFull: 30, examFull: 100, examPct: 70 })),
+    numAssignments: 3, assignOutOf: 20, passThreshold: 33, students: [student],
+  };
+  return { student, project };
+};
+
+const MarksheetThemePicker = ({ showToast }) => {
+  const [key, setKey] = useState("classic");
+  useEffect(() => { setKey(getMarksheetThemeKey()); }, []);
+  const pick = (k) => {
+    setKey(k);
+    try { localStorage.setItem("edu_ms_theme", k); } catch {}
+    showToast(`✓ ${MARKSHEET_THEMES[k].label} theme selected`);
+  };
+  const preview = () => { const { student, project } = makeSampleMarksheet(); downloadMarksheet(student, project, showToast); };
+  const rgb = (c) => `rgb(${c.join(",")})`;
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Marksheet Theme</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+        {Object.entries(MARKSHEET_THEMES).map(([k, t]) => {
+          const on = k === key;
+          const acc = t.accent || [14, 100, 180];
+          return (
+            <button key={k} onClick={() => pick(k)} style={{ padding: 8, borderRadius: 12, textAlign: "center", border: `1.5px solid ${on ? "var(--sky)" : "var(--border)"}`, background: on ? "color-mix(in srgb,var(--sky) 10%,var(--surface2))" : "var(--surface2)" }}>
+              <svg viewBox="0 0 60 78" width="100%" style={{ display: "block", borderRadius: 4 }}>
+                <rect width="60" height="78" fill="#fff" />
+                <rect x="1.5" y="1.5" width="57" height="75" fill="none" stroke={rgb(t.border)} strokeWidth="1.6" />
+                {t.innerFrame && <rect x="3.4" y="3.4" width="53.2" height="71.2" fill="none" stroke={rgb(t.border)} strokeWidth="0.5" />}
+                <rect x="0" y="0" width="60" height="3" fill={rgb(t.strip1 || acc)} />
+                <rect x="14" y="9" width="32" height="3.5" rx="1" fill={rgb(acc)} />
+                <rect x="20" y="15" width="20" height="2" fill="#9ca3af" />
+                <rect x="6" y="24" width="48" height="6" fill={rgb(t.headFill)} stroke={rgb(t.border)} strokeWidth="0.5" />
+                {[0, 1, 2, 3].map(i => <rect key={i} x="6" y={30 + i * 6} width="48" height="6" fill={i % 2 ? rgb(t.zebra) : "#fff"} stroke="#d1d5db" strokeWidth="0.4" />)}
+                <rect x="6" y="57" width="23" height="9" fill="none" stroke={rgb(t.border)} strokeWidth="0.7" />
+                <rect x="31" y="57" width="23" height="9" fill="none" stroke={rgb(t.border)} strokeWidth="0.7" />
+                <rect x="10" y="61" width="15" height="2.5" fill={rgb(t.value)} />
+                <rect x="35" y="61" width="15" height="2.5" fill={rgb(t.value)} />
+              </svg>
+              <div style={{ fontSize: 11, fontWeight: 700, marginTop: 6, color: on ? "var(--sky)" : "var(--text2)" }}>{t.label}{on ? " ✓" : ""}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10, lineHeight: 1.5 }}>Used for every marksheet PDF you download (single or ZIP) on this device. Classic tints the header by each student's grade.</div>
+      <Btn variant="sky" size="sm" onClick={preview} style={{ width: "100%" }}>👁 Preview sample marksheet</Btn>
+    </Card>
+  );
+};
+
+const InstallCard = ({ showToast }) => {
+  const [evt, setEvt] = useState(null);
+  const [standalone, setStandalone] = useState(false);
+  const [ios, setIos] = useState(false);
+  useEffect(() => {
+    const sync = () => setEvt(window.__eduInstallEvt || null);
+    sync();
+    setStandalone(window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true);
+    setIos(/iphone|ipad|ipod/i.test(window.navigator.userAgent));
+    window.addEventListener("edu-install-ready", sync);
+    return () => window.removeEventListener("edu-install-ready", sync);
+  }, []);
+  const install = async () => {
+    if (!evt) return;
+    evt.prompt();
+    try { await evt.userChoice; } catch {}
+    window.__eduInstallEvt = null; setEvt(null);
+  };
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Install App</div>
+      <div style={{ fontSize: 12.5, color: "var(--text2)", lineHeight: 1.6, marginBottom: 12 }}>
+        {standalone
+          ? "✓ EduGrade is installed on this device."
+          : "Add EduGrade to your home screen for a full-screen app that opens instantly."}
+        {" "}Marks you enter without internet are saved on the device and sync automatically when you reconnect.
+      </div>
+      {!standalone && evt && <Btn onClick={install} style={{ width: "100%" }}>⬇ Install EduGrade</Btn>}
+      {!standalone && !evt && (
+        <div style={{ fontSize: 11.5, color: "var(--text2)", background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 12px", lineHeight: 1.55 }}>
+          {ios ? "On iPhone/iPad: tap the Share button, then “Add to Home Screen”." : "Open your browser menu (⋮) and choose “Install app” or “Add to Home screen”."}
+        </div>
+      )}
+    </Card>
+  );
+};
+
 // ─── Firebase Loader ──────────────────────────────────────────────────────────
 const useFirebase = () => {
   const [firebase, setFirebase] = useState(null);
@@ -2083,7 +2584,13 @@ const useFirebase = () => {
         ? getApps()[0]
         : initializeApp(FIREBASE_CONFIG);
       const auth = getAuth(app);
-      const db   = getFirestore(app);
+      let db;
+      try {
+        // Persistent cache = data you've opened stays readable offline, writes queue until reconnect.
+        db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+      } catch (e) {
+        db = getFirestore(app); // already initialised (hot reload) or persistence unsupported
+      }
       // Wrap in compat-style object so rest of code works unchanged
       const fbAuth = {
         signInWithEmailAndPassword: (email, pass) =>
@@ -2167,10 +2674,33 @@ const useFirebase = () => {
           }),
         }),
       };
+      // ── Sharing helpers (co-teacher access) ──
+      fbDb.listSharedWithMe = (email) =>
+        import('firebase/firestore').then(({ collection, query, where, getDocs }) =>
+          getDocs(query(collection(db, "sharedProjects"), where("email", "==", email)))
+            .then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      fbDb.getProject = (ownerUid, projectId) =>
+        import('firebase/firestore').then(({ doc, getDoc }) =>
+          getDoc(doc(db, "users", ownerUid, "projects", projectId)).then(s =>
+            s.exists() ? { id: s.id, ...s.data(), students: s.data().students || [] } : null));
+      fbDb.addCollaborator = (ownerUid, projectId, email, meta) =>
+        import('firebase/firestore').then(async ({ doc, updateDoc, arrayUnion, addDoc, collection }) => {
+          await updateDoc(doc(db, "users", ownerUid, "projects", projectId), { collaborators: arrayUnion(email) });
+          await addDoc(collection(db, "sharedProjects"), {
+            email, ownerUid, projectId, ...meta, createdAt: new Date().toISOString(),
+          });
+        });
+      fbDb.removeCollaborator = (ownerUid, projectId, email) =>
+        import('firebase/firestore').then(async ({ doc, updateDoc, arrayRemove, collection, query, where, getDocs, deleteDoc }) => {
+          await updateDoc(doc(db, "users", ownerUid, "projects", projectId), { collaborators: arrayRemove(email) });
+          const snap = await getDocs(query(collection(db, "sharedProjects"),
+            where("ownerUid", "==", ownerUid), where("projectId", "==", projectId), where("email", "==", email)));
+          await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+        });
       // Atomic read-modify-write for a project's `students` array.
       // Prevents rapid successive saves from overwriting each other's data
       // (previously each save wrote the whole array from stale local state).
-      fbDb.mutateStudents = (uid, projectId, mutateFn) =>
+      const _mutateStudentsOnline = (uid, projectId, mutateFn) =>
         import('firebase/firestore').then(({ doc, runTransaction }) =>
           runTransaction(db, async (tx) => {
             const ref = doc(db, "users", uid, "projects", projectId);
@@ -2187,7 +2717,7 @@ const useFirebase = () => {
       // race with a concurrent mark-entry save, and re-maps every existing
       // student's subjectResults/finalMarks so their marks stay attached to
       // the correct subject after the move — marks/scores themselves never change.
-      fbDb.reorderSubjects = (uid, projectId, newOrder, newNames) =>
+      const _reorderOnline = (uid, projectId, newOrder, newNames) =>
         import('firebase/firestore').then(({ doc, runTransaction }) =>
           runTransaction(db, async (tx) => {
             const ref = doc(db, "users", uid, "projects", projectId);
@@ -2206,6 +2736,24 @@ const useFirebase = () => {
             tx.update(ref, payload);
             return payload;
           }));
+      const offlineNow = () => typeof navigator !== "undefined" && navigator.onLine === false;
+      fbDb.mutateStudents = (uid, projectId, mutateFn) => {
+        if (!offlineNow()) return _mutateStudentsOnline(uid, projectId, mutateFn);
+        // Offline: transactions can't run, so read the cached project, apply the change and
+        // queue the write — Firestore syncs it automatically when the connection returns.
+        return import('firebase/firestore').then(async ({ doc, getDoc, updateDoc }) => {
+          const ref = doc(db, "users", uid, "projects", projectId);
+          const snap = await getDoc(ref);
+          const current = (snap.data() || {}).students || [];
+          const next = mutateFn(current);
+          updateDoc(ref, { students: next }).catch(e => console.warn("Queued write failed:", e));
+          return next;
+        });
+      };
+      fbDb.reorderSubjects = (uid, projectId, newOrder, newNames) =>
+        offlineNow()
+          ? Promise.reject(new Error("Reconnect to reorder subjects"))
+          : _reorderOnline(uid, projectId, newOrder, newNames);
       setFirebase({ auth: fbAuth, db: fbDb });
       setFbReady(true);
     } catch(e) { console.error('Firebase init error:', e); setFbError(true); }
@@ -2279,7 +2827,8 @@ export default function Home() {
     const unsub=firebase.auth.onAuthStateChanged(async(u)=>{
       setUser(u); setAuthReady(true);
       if(u){
-        const snap=await firebase.db.collection("users").doc(u.uid).get();
+        let snap={exists:false};
+        try{ snap=await firebase.db.collection("users").doc(u.uid).get(); }catch(e){ console.warn("Profile unavailable (offline?)",e); }
         if(snap.exists){
           const data=snap.data();
           setUserData(data);
@@ -2289,7 +2838,20 @@ export default function Home() {
           setProjectsLoading(true);
           const projSnap=await firebase.db.collection("users").doc(u.uid)
             .collection("projects").orderBy("createdAt","asc").get();
-          setProjects(projSnap.docs.map(d=>({id:d.id,...d.data()})));
+          const ownList=projSnap.docs.map(d=>({id:d.id,...d.data()}));
+          let sharedList=[];
+          try{
+            const shares=await firebase.db.listSharedWithMe((u.email||"").toLowerCase());
+            const loaded=await Promise.all(shares.map(async sh=>{
+              try{
+                const pd=await firebase.db.getProject(sh.ownerUid,sh.projectId);
+                if(!pd) return null;
+                return {...pd,shared:true,ownerUid:sh.ownerUid,ownerName:sh.ownerName||"a teacher"};
+              }catch(e){ return null; }
+            }));
+            sharedList=loaded.filter(Boolean).filter(p=>!ownList.some(o=>o.id===p.id));
+          }catch(e){ console.warn("Shared projects unavailable:",e); }
+          setProjects([...ownList,...sharedList]);
           setProjectsLoading(false);
         }catch(e){ console.error(e); setProjectsLoading(false); }
       } else {
@@ -2368,6 +2930,7 @@ export default function Home() {
 
   // ── Create Project ─────────────────────────────────────────────────
   const createProject = async()=>{
+    if(typeof navigator !== "undefined" && !navigator.onLine) return showToast("⚠ Go online to create a project");
     if(!examName.trim()||!subjectCount) return showToast("⚠ Fill exam name and subject count");
     const n=Number(subjectCount);
     if(n<1||n>20) return showToast("⚠ Subjects: 1–20");
@@ -2408,6 +2971,7 @@ export default function Home() {
   };
 
   const deleteProject=async(id)=>{
+    if(typeof navigator !== "undefined" && !navigator.onLine) return showToast("⚠ Go online to delete a project");
     setConfirmModal({title:"Delete Project",msg:"Delete this project and ALL student data? This cannot be undone.",ok:"Delete",onOk:async()=>{ setConfirmModal(null);
     try{
       await firebase.db.collection("users").doc(user.uid).collection("projects").doc(id).delete();
@@ -2421,6 +2985,7 @@ export default function Home() {
   };
 
   const renameProject=async(id,newName)=>{
+    if(typeof navigator !== "undefined" && !navigator.onLine) return showToast("⚠ Go online to rename a project");
     if(!newName.trim()) return showToast("⚠ Name required");
     try{
       await firebase.db.collection("users").doc(user.uid).collection("projects").doc(id).update({examName:newName.trim()});
@@ -2430,7 +2995,19 @@ export default function Home() {
   };
 
   // ── Add Student ─────────────────────────────────────────────────────
-  const addStudent=async()=>{
+  const addStudent=()=>{
+    if(!activeProject) return;
+    if(!studentName.trim()||!roll.trim()) return showToast("⚠ Name & Roll required");
+    const rollKey=roll.trim();
+    const existing=activeProject.students.find(s=>String(s.roll)===rollKey);
+    if(existing){
+      setConfirmModal({title:"Update Student?",msg:`Roll ${rollKey} (${existing.name}) is already saved. Replace the saved marks with these new ones?`,ok:"Update",variant:"primary",onOk:()=>commitStudent()});
+      return;
+    }
+    commitStudent();
+  };
+
+  const commitStudent=async()=>{
     if(!activeProject) return;
     if(!studentName.trim()||!roll.trim()) return showToast("⚠ Name & Roll required");
     const {gpa,grade,total,subResults,status}=calcStudent(subjectEntries,activeProject);
@@ -2443,11 +3020,11 @@ export default function Home() {
     setSaving(true);
     try{
       let confirmedUpdate = true;
-      const nextStudents = await firebase.db.mutateStudents(user.uid, activeProject.id, (current) => {
+      const nextStudents = await firebase.db.mutateStudents(activeProject.ownerUid||user.uid, activeProject.id, (current) => {
         const list = [...current];
         const idx = list.findIndex(s=>s.roll===obj.roll);
         if(idx!==-1){
-          if(!window.confirm("Student exists. Update?")){ confirmedUpdate = false; return current; }
+          
           list[idx]=obj;
         } else { list.push(obj); }
         return list;
@@ -2457,7 +3034,7 @@ export default function Home() {
       const updated=[...projects]; updated[activeProjectIndex]=pr;
       setProjects(updated); setViewStudent(obj);
       setStudentName(""); setRoll(""); setSubjectEntries(freshEntries(activeProject));
-      showToast("✓ Saved");
+      showToast(typeof navigator!=="undefined"&&!navigator.onLine?"✓ Saved offline — will sync":"✓ Saved");
     }catch(e){ showToast("✗ "+e.message); }
     setSaving(false);
   };
@@ -2466,7 +3043,7 @@ export default function Home() {
     if(!activeProject) return;
     setConfirmModal({title:"Remove Student",msg:"Remove this student permanently?",ok:"Remove",onOk:async()=>{ setConfirmModal(null);
     try{
-      const nextStudents = await firebase.db.mutateStudents(user.uid, activeProject.id, (current) => current.filter(s=>s.roll!==rollNo));
+      const nextStudents = await firebase.db.mutateStudents(activeProject.ownerUid||user.uid, activeProject.id, (current) => current.filter(s=>s.roll!==rollNo));
       const pr={...activeProject,students:nextStudents};
       const updated=[...projects]; updated[activeProjectIndex]=pr;
       setProjects(updated);
@@ -2491,10 +3068,68 @@ export default function Home() {
 
   const meritRanks=activeProject?getMeritRank(activeProject.students):{};
   const [meritSort, setMeritSort] = useState("roll"); // "roll" | "merit"
+  const [shareModal, setShareModal] = useState(null);
+  const [online, setOnline] = useState(true);
+  useEffect(()=>{
+    if(typeof window==="undefined") return;
+    const ensure=(tag,attrs,sel)=>{
+      if(document.querySelector(sel)) return;
+      const el=document.createElement(tag);
+      Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
+      document.head.appendChild(el);
+    };
+    ensure("link",{rel:"manifest",href:"/manifest.json"},'link[rel="manifest"]');
+    ensure("meta",{name:"theme-color",content:"#0ea5e9"},'meta[name="theme-color"]');
+    ensure("link",{rel:"apple-touch-icon",href:"/icon-192.png"},'link[rel="apple-touch-icon"]');
+    ensure("meta",{name:"apple-mobile-web-app-capable",content:"yes"},'meta[name="apple-mobile-web-app-capable"]');
+    ensure("meta",{name:"mobile-web-app-capable",content:"yes"},'meta[name="mobile-web-app-capable"]');
+    if(process.env.NODE_ENV==="production"&&"serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js").catch(()=>{});
+    }
+    // Pre-fetch the PDF/ZIP libraries once so marksheets also work offline later.
+    const warm=setTimeout(()=>{
+      if(!navigator.onLine) return;
+      ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+       "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
+       "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"].forEach(u=>fetch(u,{mode:"no-cors"}).catch(()=>{}));
+    },4000);
+    const onPrompt=(e)=>{ e.preventDefault(); window.__eduInstallEvt=e; window.dispatchEvent(new Event("edu-install-ready")); };
+    const onInstalled=()=>{ window.__eduInstallEvt=null; window.dispatchEvent(new Event("edu-install-ready")); showToast("✓ EduGrade installed!"); };
+    const goOnline=()=>{ setOnline(true); showToast("✓ Back online — syncing changes"); };
+    const goOffline=()=>setOnline(false);
+    setOnline(navigator.onLine);
+    window.addEventListener("beforeinstallprompt",onPrompt);
+    window.addEventListener("appinstalled",onInstalled);
+    window.addEventListener("online",goOnline);
+    window.addEventListener("offline",goOffline);
+    return()=>{
+      clearTimeout(warm);
+      window.removeEventListener("beforeinstallprompt",onPrompt);
+      window.removeEventListener("appinstalled",onInstalled);
+      window.removeEventListener("online",goOnline);
+      window.removeEventListener("offline",goOffline);
+    };
+  },[showToast]);
+  const [tieModalOpen, setTieModalOpen] = useState(false);
+  const saveTieOrder = async (updates) => {
+    setSaving(true);
+    try {
+      const next = await firebase.db.mutateStudents(activeProject.ownerUid||user.uid, activeProject.id, (current) => current.map(s => {
+        const key = String(s.roll);
+        if (!(key in updates)) return s;
+        const copy = { ...s };
+        delete copy.tieOrder;
+        return updates[key] == null ? copy : { ...copy, tieOrder: updates[key] };
+      }));
+      const updated = [...projects]; updated[activeProjectIndex] = { ...activeProject, students: next };
+      setProjects(updated); setTieModalOpen(false); showToast("✓ Merit order updated");
+    } catch (e) { showToast("✗ " + e.message); }
+    setSaving(false);
+  };
   const sortedByRoll=activeProject?[...activeProject.students].sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})):[];
-  const sortedByMerit=activeProject?[...activeProject.students].sort((a,b)=>b.gpa-a.gpa||b.total-a.total):[];
+  const sortedByMerit=activeProject?sortByMerit(activeProject.students):[];
   const meritTableList = meritSort==="merit" ? sortedByMerit : sortedByRoll;
-  const top3=activeProject?[...activeProject.students].sort((a,b)=>b.gpa-a.gpa||b.total-a.total).slice(0,3):[];
+  const top3=activeProject?sortByMerit(activeProject.students).slice(0,3):[];
   const medalColors=["#f59e0b","#94a3b8","#cd7c2f"];
   const medals=["🥇","🥈","🥉"];
 
@@ -2598,7 +3233,7 @@ export default function Home() {
     const newNames = reorderList.map(it => it.name);
     setSaving(true);
     try {
-      const result = await firebase.db.reorderSubjects(user.uid, activeProject.id, newOrder, newNames);
+      const result = await firebase.db.reorderSubjects(activeProject.ownerUid||user.uid, activeProject.id, newOrder, newNames);
       const pr = { ...activeProject, ...result };
       const updated = [...projects]; updated[activeProjectIndex] = pr;
       setProjects(updated);
@@ -2615,6 +3250,9 @@ export default function Home() {
     <>
       <GlobalStyle dark={dark}/>
       {toast&&<Toast msg={toast}/>}
+      {!online&&(
+        <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(76px + env(safe-area-inset-bottom))",zIndex:1500,background:"color-mix(in srgb,var(--yellow) 16%,var(--surface))",border:"1.5px solid color-mix(in srgb,var(--yellow) 40%,var(--border))",color:"var(--yellow)",padding:"7px 16px",borderRadius:30,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",animation:"fadeIn 0.25s ease"}}>📡 Offline · changes sync when you're back</div>
+      )}
       {splash&&<LogoSplash onDone={()=>setSplash(false)}/>}
       {confirmModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
@@ -2623,7 +3261,7 @@ export default function Home() {
             <div style={{color:"var(--text2)",fontSize:13,marginBottom:20,lineHeight:1.5}}>{confirmModal.msg}</div>
             <div style={{display:"flex",gap:10}}>
               <Btn variant="ghost" onClick={()=>setConfirmModal(null)} style={{flex:1}}>Cancel</Btn>
-              <Btn variant="danger" onClick={()=>{setConfirmModal(null);confirmModal.onOk();}} style={{flex:1}}>{confirmModal.ok}</Btn>
+              <Btn variant={confirmModal.variant||"danger"} onClick={()=>{setConfirmModal(null);confirmModal.onOk();}} style={{flex:1}}>{confirmModal.ok}</Btn>
             </div>
           </div>
         </div>
@@ -2631,6 +3269,7 @@ export default function Home() {
       {isAccountBlocked&&<BlockedModal onSignOut={signOut}/>}
       {showAdmin&&firebase&&<AdminPanel firebase={firebase} showToast={showToast} onClose={()=>setShowAdmin(false)}/>}
       {studentModal&&<StudentListModal title={studentModal.title} students={studentModal.students} color={studentModal.color} onClose={()=>setStudentModal(null)}/>}
+      {shareModal&&firebase&&<ShareModal project={shareModal} firebase={firebase} user={user} userData={userData} showToast={showToast} onClose={()=>setShareModal(null)} onChanged={(list)=>{setProjects(prev=>prev.map(p=>p.id===shareModal.id?{...p,collaborators:list}:p));setShareModal(m=>m?{...m,collaborators:list}:m);}}/>}
 
       <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px 120px",minHeight:"100vh"}}>
 
@@ -2657,6 +3296,19 @@ export default function Home() {
                   </h1>
                   <p style={{color:"var(--text2)",fontSize:13}}>{user.email}</p>
                 </div>
+
+                {projects.length>0&&(()=>{
+                  const totalStudents=projects.reduce((a,p)=>a+(p.students?.length||0),0);
+                  const passed=projects.reduce((a,p)=>a+(p.students||[]).filter(s=>s.status==="PASS").length,0);
+                  const rate=totalStudents?((passed/totalStudents)*100).toFixed(0):"0";
+                  return(
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:20}}>
+                      <StatTile label="Projects" value={projects.length} color="var(--sky)"/>
+                      <StatTile label="Students" value={totalStudents} color="var(--indigo)"/>
+                      <StatTile label="Pass Rate" value={`${rate}%`} color="var(--green)"/>
+                    </div>
+                  );
+                })()}
 
                 {/* Projects */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -2689,7 +3341,7 @@ export default function Home() {
                           <IcoDoc s={22} c={["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]}/>
                         </div>
                         <div onClick={()=>{setActiveProjectIndex(i);setSubjectEntries(freshEntries(p));setViewStudent(null);go("app");}} style={{flex:1,cursor:"pointer"}}>
-                          <div style={{fontWeight:700,fontSize:14.5,marginBottom:2,letterSpacing:"-0.01em"}}>{p.examName}</div>
+                          <div style={{fontWeight:700,fontSize:14.5,marginBottom:2,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>{p.examName}{p.shared&&<Pill color="var(--indigo)">Shared · {p.ownerName}</Pill>}{!p.shared&&(p.collaborators||[]).length>0&&<Pill color="var(--sky)">👥 {(p.collaborators||[]).length}</Pill>}</div>
                           <div style={{color:"var(--text2)",fontSize:12}}>
                             {p.institution&&<span>{p.institution}{p.className?" · "+p.className:""} · </span>}
                             {p.students.length} students · {p.subjectCount} subjects
@@ -2702,9 +3354,10 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      <div style={{display:"flex",borderTop:"1px solid var(--border)"}}>
+                      <div style={{display:p.shared?"none":"flex",borderTop:"1px solid var(--border)"}}>
                         {[
                           {icon:"✏️",label:"Rename",action:()=>{setRenamingProject(p.id);setRenameValue(p.examName);}},
+                          {icon:"👥",label:"Share",action:()=>setShareModal(p)},
                           {icon:"🗑",label:"Delete",action:()=>deleteProject(p.id),danger:true},
                         ].map(({icon,label,action,danger})=>(
                           <button key={label} onClick={e=>{e.stopPropagation();action();}} style={{flex:1,padding:"8px 2px",border:"none",background:"transparent",color:danger?"var(--red)":"var(--text2)",fontSize:10.5,fontWeight:600,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderRight:label!=="Delete"?"1px solid var(--border)":undefined}}>
@@ -2962,27 +3615,43 @@ export default function Home() {
                                 {Array(na).fill(null).map((_,ai)=>(
                                   <div key={ai} style={{display:"flex",alignItems:"center",gap:10}}>
                                     <span style={{fontSize:11,color:"#818cf8",fontWeight:600,minWidth:80}}>Assignment {ai+1}</span>
-                                    <input type="number" placeholder="0" min={0} max={aoof} value={(entry.assignments||[])[ai]??""} onChange={e=>{setSubjectEntries(prev=>prev.map((en,s)=>{if(s!==si)return en;const a=[...(en.assignments||[])];a[ai]=e.target.value;return{...en,assignments:a};}));}} style={{flex:1,textAlign:"center"}}/>
+                                    <input type="number" placeholder="0" min={0} max={aoof} value={(entry.assignments||[])[ai]??""} onChange={e=>{setSubjectEntries(prev=>prev.map((en,s)=>{if(s!==si)return en;const a=[...(en.assignments||[])];a[ai]=clampMark(e.target.value,aoof);return{...en,assignments:a};}));}} style={{flex:1,textAlign:"center"}}/>
                                     <span style={{fontSize:11,color:"var(--text3)",minWidth:28}}>/{aoof}</span>
                                   </div>
                                 ))}
                                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                                   <span style={{fontSize:11.5,color:"var(--sky)",fontWeight:600,minWidth:90}}>MCQ / Oral</span>
-                                  <input type="number" placeholder="0" min={0} value={entry.mcq??""} onChange={e=>setSubjectEntries(prev=>prev.map((en,s)=>s===si?{...en,mcq:e.target.value}:en))} style={{flex:1,textAlign:"center"}}/>
+                                  <input type="number" placeholder="0" min={0} value={entry.mcq??""} onChange={e=>setSubjectEntries(prev=>prev.map((en,s)=>s===si?{...en,mcq:clampMark(e.target.value,ss.examFull||100)}:en))} style={{flex:1,textAlign:"center"}}/>
                                   <span style={{fontSize:11,color:"var(--text3)",minWidth:28}}>/{ss.examFull||100}</span>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                                   <span style={{fontSize:11.5,color:"var(--amber)",fontWeight:600,minWidth:90}}>CQ / Written</span>
-                                  <input type="number" placeholder="0" min={0} value={entry.cq??""} onChange={e=>setSubjectEntries(prev=>prev.map((en,s)=>s===si?{...en,cq:e.target.value}:en))} style={{flex:1,textAlign:"center"}}/>
+                                  <input type="number" placeholder="0" min={0} value={entry.cq??""} onChange={e=>setSubjectEntries(prev=>prev.map((en,s)=>s===si?{...en,cq:clampMark(e.target.value,ss.examFull||100)}:en))} style={{flex:1,textAlign:"center"}}/>
                                   <span style={{fontSize:11,color:"var(--text3)",minWidth:28}}>/{ss.examFull||100}</span>
                                 </div>
-                                <div style={{fontSize:11,color:"var(--text2)",display:"flex",gap:10,flexWrap:"wrap",paddingTop:6,marginTop:2,borderTop:"1px solid var(--border)"}}>
-                                  <span>Assign: <b style={{color:"#818cf8",fontFamily:"var(--font-mono)"}}>{r.assignTotal}/{na*aoof}</b></span>
-                                  <span>CA: <b style={{color:"#818cf8",fontFamily:"var(--font-mono)"}}>{r.ca}</b></span>
-                                  <span>Exam: <b style={{color:"var(--sky)",fontFamily:"var(--font-mono)"}}>{r.rawExam}</b></span>
-                                  <span>B: <b style={{color:"var(--amber)",fontFamily:"var(--font-mono)"}}>{r.b}</b></span>
-                                  <span style={{fontWeight:700}}>Total: <b style={{color:"var(--green)",fontFamily:"var(--font-mono)"}}>{r.ab}/{Math.round(r.subFull)}</b></span>
-                                  <span style={{marginLeft:"auto",color:passLive?"var(--green)":"var(--red)",fontWeight:700}}>{pctLive.toFixed(1)}%</span>
+                                <div style={{borderTop:"1px solid var(--border)",paddingTop:9,marginTop:2}}>
+                                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                                    {[
+                                      {l:"Assign",v:`${r.assignTotal}/${na*aoof}`,c:"#818cf8"},
+                                      {l:"CA",v:r.ca,c:"#818cf8"},
+                                      {l:"Exam",v:r.rawExam,c:"var(--sky)"},
+                                      {l:"B",v:r.b,c:"var(--amber)"},
+                                    ].map(({l,v,c})=>(
+                                      <div key={l} style={{background:`color-mix(in srgb,${c} 10%,var(--surface))`,border:`1px solid color-mix(in srgb,${c} 24%,var(--border))`,borderRadius:10,padding:"6px 4px",textAlign:"center"}}>
+                                        <div style={{fontSize:8.5,fontWeight:700,letterSpacing:"0.09em",textTransform:"uppercase",color:"var(--text2)",marginBottom:3}}>{l}</div>
+                                        <div style={{fontSize:12.5,fontWeight:800,color:c,fontFamily:"var(--font-mono)",lineHeight:1.1}}>{v}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{marginTop:10}}>
+                                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+                                      <span style={{fontSize:10.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text2)"}}>Total <b style={{color:"var(--green)",fontFamily:"var(--font-mono)",fontSize:13,letterSpacing:0}}>{r.ab}/{Math.round(r.subFull)}</b></span>
+                                      <span style={{fontSize:13,fontWeight:800,fontFamily:"var(--font-mono)",color:(r.pct>=0&&r.pct<(activeProject.passThreshold??33))?"var(--red)":"var(--green)"}}>{r.pct.toFixed(1)}%</span>
+                                    </div>
+                                    <div style={{height:4,borderRadius:2,background:"var(--border)",overflow:"hidden"}}>
+                                      <div style={{height:4,borderRadius:2,width:`${Math.min(r.pct,100)}%`,background:(r.pct<(activeProject.passThreshold??33))?"var(--red)":"var(--green)",transition:"width 0.4s ease"}}/>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -3082,12 +3751,13 @@ export default function Home() {
                             setStudentName(viewStudent.name);
                             setRoll(viewStudent.roll);
                             const entries=(viewStudent.subjectResults||[]).map(sr=>({
-                              assignments:[sr.ca??0],
+                              assignments:(sr.assignments&&sr.assignments.length?sr.assignments.map(String):Array(activeProject.numAssignments||1).fill("")),
                               mcq:sr.mcq??sr.rawExam??0,
                               cq:sr.cq??0,
                             }));
                             const count=activeProject.subjectCount||entries.length;
-                            while(entries.length<count) entries.push({assignments:[0],mcq:0,cq:0});
+                            while(entries.length<count) entries.push({assignments:Array(activeProject.numAssignments||1).fill(""),mcq:"",cq:""});
+                            window.scrollTo({top:0,behavior:"smooth"});
                             setSubjectEntries(entries);
                             setViewStudent(null);
                             go("app");
@@ -3102,8 +3772,9 @@ export default function Home() {
 
                     {/* All Students Table */}
                     <Card style={{padding:0,borderRadius:18,overflow:"hidden"}}>
-                      <div style={{padding:"14px 16px",borderBottom:"1.5px solid var(--border)",fontWeight:700,fontSize:14}}>
-                        All Students ({activeProject.students.length})
+                      <div style={{padding:"14px 16px",borderBottom:"1.5px solid var(--border)",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                        <span>All Students ({activeProject.students.length})</span>
+                        {activeProject.students.length>0&&<Btn variant="sky" size="sm" onClick={()=>downloadAllMarksheetsZip(activeProject,showToast)}>📦 All Marksheets (ZIP)</Btn>}
                       </div>
                       {activeProject.students.length===0?(
                         <div style={{textAlign:"center",padding:"40px 24px"}}>
@@ -3255,7 +3926,7 @@ export default function Home() {
 
             {/* ── MERIT ── */}
             {page==="settings"&&(
-              <div>
+              <div style={{animation:"up 0.28s ease",paddingTop:24}}>
                 <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:"var(--sky)",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                   <span style={{display:"inline-block",width:18,height:2,background:"linear-gradient(90deg,var(--sky),transparent)",borderRadius:2}}/>
                   ACCOUNT
@@ -3298,6 +3969,8 @@ export default function Home() {
                     </div>
                   </div>
                 </Card>
+                <InstallCard showToast={showToast}/>
+                <MarksheetThemePicker showToast={showToast}/>
                 <Btn variant="danger" onClick={signOut} style={{width:"100%"}}>Sign Out</Btn>
               </div>
             )}
@@ -3318,6 +3991,10 @@ export default function Home() {
                       <button onClick={()=>setMeritSort("roll")} style={{flex:1,padding:"8px 0",borderRadius:12,border:`1.5px solid ${meritSort==="roll"?"var(--sky)":"var(--border)"}`,background:meritSort==="roll"?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface2)",color:meritSort==="roll"?"var(--sky)":"var(--text2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sort by Roll No.</button>
                       <button onClick={()=>setMeritSort("merit")} style={{flex:1,padding:"8px 0",borderRadius:12,border:`1.5px solid ${meritSort==="merit"?"var(--sky)":"var(--border)"}`,background:meritSort==="merit"?"color-mix(in srgb,var(--sky) 15%,var(--surface))":"var(--surface2)",color:meritSort==="merit"?"var(--sky)":"var(--text2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sort by Merit</button>
                     </div>
+                    {getTieGroups(activeProject.students).length>0&&(
+                      <button onClick={()=>setTieModalOpen(true)} style={{width:"100%",marginBottom:16,marginTop:-4,padding:"9px 0",borderRadius:12,border:"1.5px solid color-mix(in srgb,var(--amber) 35%,var(--border))",background:"color-mix(in srgb,var(--amber) 8%,var(--surface))",color:"var(--amber)",fontSize:12,fontWeight:700,cursor:"pointer"}}>⚖ Set merit for tied students ({getTieGroups(activeProject.students).length})</button>
+                    )}
+                    {tieModalOpen&&<TieBreakModal students={activeProject.students} onClose={()=>setTieModalOpen(false)} onSave={saveTieOrder} saving={saving}/>}
                     {top3.length>0&&(
                       <div style={{marginBottom:20}}>
                         <div style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"var(--text2)",marginBottom:12}}>🏆 Top Performers</div>
@@ -3366,7 +4043,10 @@ export default function Home() {
                         </tbody>
                       </table>
                     </Card>
-                    <Btn onClick={()=>downloadMeritListPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg">⬇ Download Merit List PDF</Btn>
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <Btn onClick={()=>downloadMeritListPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg">⬇ Download Merit List PDF</Btn>
+                      <Btn variant="sky" onClick={()=>downloadTabulationPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg">📊 Download Tabulation Sheet PDF</Btn>
+                    </div>
                   </>
                 )}
               </div>

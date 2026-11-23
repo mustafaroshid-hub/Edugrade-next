@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email == "mustafaroshid@gmail.com";
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin();
+
+      match /projects/{projectId} {
+        // a co-teacher = their email is listed in the project's `collaborators`
+        function isCollab() {
+          return request.auth != null && request.auth.token.email != null &&
+            request.auth.token.email.lower() in resource.data.get('collaborators', []);
+        }
+        allow read: if request.auth.uid == userId || isAdmin() || isCollab();
+        allow create, delete: if request.auth.uid == userId || isAdmin();
+        // co-teachers may only change marks / subject order, nothing else
+        allow update: if request.auth.uid == userId || isAdmin() ||
+          (isCollab() && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['students', 'subjectNames', 'subjectSettings']));
+      }
+    }
+
+    match /adminNotifications/{docId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.auth != null;
+    }
+
+    // invitations: who a project was shared with
+    match /sharedProjects/{shareId} {
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+      allow read: if request.auth != null &&
+        (resource.data.ownerUid == request.auth.uid || resource.data.email == request.auth.token.email) || isAdmin();
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid || isAdmin();
+    }
+  }
+}
