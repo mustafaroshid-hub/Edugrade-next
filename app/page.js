@@ -1488,6 +1488,7 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                       </div>
                     ))}
                   </div>
+                  <AlmostThereCard project={activeProject} />
                   <Card>
                     <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Grade Distribution</div>
                     {Object.entries(gradeDist).sort().map(([g, cnt]) => (
@@ -1507,7 +1508,6 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                       <div style={{ color: "var(--text2)", fontSize: 12 }}>Roll: {topStudent.roll} · GPA {topStudent.gpa} · {topStudent.grade}</div>
                     </Card>
                   )}
-                  <AlmostThereCard project={activeProject} />
                 </div>
               );
             })()}
@@ -2582,10 +2582,10 @@ const getAlmostThere = (project, margin) => {
   const names = Array.from({ length: n }, (_, i) => project.subjectNames?.[i] || `Subject ${i + 1}`);
   const r1 = (v) => Math.ceil(v * 10 - 1e-9) / 10;
   const fmt = (v) => String(Number(Number(v).toFixed(1)));
-  const failNear = [], gradeNear = [], examRule = [];
+  const failNear = [], gradeNear = [];
 
   (project.students || []).forEach((s) => {
-    const failedItems = [], gradeItems = [], ruleItems = [];
+    const failedItems = [], gradeItems = [];
     let failedCount = 0;
     for (let i = 0; i < n; i++) {
       const r = (s.subjectResults || [])[i];
@@ -2599,10 +2599,6 @@ const getAlmostThere = (project, margin) => {
         const gapExam = (((thresh / 100) * examFull - r.rawExam) * examPct) / 100;
         const gap = r1(Math.max(gapOverall, gapExam, 0.1));
         const examNeed = Math.ceil((thresh / 100) * examFull - 1e-9);
-        // total reaches the pass mark, but the exam part alone is below its own pass mark
-        if (gapOverall <= 0 && gapExam > 0) {
-          ruleItems.push({ subject: names[i], ab: r.ab, full: subFull, gap: r1(Math.max(examNeed - r.rawExam, 0.1)), examRule: true, examGot: r.rawExam, examFull, examNeed });
-        }
         if (gap <= margin) {
           failedItems.push({ subject: names[i], ab: r.ab, full: subFull, gap, examOnly: gapExam > gapOverall });
         } else if (gapOverall > 0 && gapOverall <= margin) {
@@ -2625,23 +2621,21 @@ const getAlmostThere = (project, margin) => {
         total: r1(failedItems.filter(x => !x.blocked).reduce((a, x) => a + x.gap, 0)),
       });
     }
-    if (ruleItems.length) examRule.push({ student: s, items: ruleItems, onlyThis: ruleItems.length === failedCount });
     if (gradeItems.length) gradeNear.push({ student: s, items: gradeItems });
   });
   const byRoll = (a, b) => rollCompare(a.student, b.student);
   failNear.sort((a, b) => a.total - b.total || byRoll(a, b));
   gradeNear.sort((a, b) => a.items[0].gap - b.items[0].gap || byRoll(a, b));
-  examRule.sort((a, b) => a.items[0].gap - b.items[0].gap || byRoll(a, b));
-  return { failNear, gradeNear, examRule, fmt, thresh };
+  return { failNear, gradeNear, fmt };
 };
 
 const AlmostThereCard = ({ project }) => {
-  const [margin, setMargin] = useState(5);
+  const [margin, setMargin] = useState(3);
   const [tab, setTab] = useState("fail");
-  const { failNear, gradeNear, examRule, fmt, thresh } = getAlmostThere(project, margin);
+  const { failNear, gradeNear, fmt } = getAlmostThere(project, margin);
   const savable = failNear.filter(x => x.graceOnly);
   const graceTotal = savable.reduce((a, x) => a + x.total, 0);
-  const list = tab === "fail" ? failNear : tab === "exam" ? examRule : gradeNear;
+  const list = tab === "fail" ? failNear : gradeNear;
   const accent = tab === "fail" ? "var(--red)" : "var(--amber)";
 
   return (
@@ -2649,22 +2643,19 @@ const AlmostThereCard = ({ project }) => {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
         <div style={{ fontWeight: 700, fontSize: 13.5 }}>🎯 Almost There</div>
         <div style={{ display: "flex", gap: 5 }}>
-          {[2, 3, 5, 10].map(m => (
+          {[1, 2, 3, 5].map(m => (
             <button key={m} onClick={() => setMargin(m)} style={{ padding: "4px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: `1.5px solid ${margin === m ? "var(--sky)" : "var(--border)"}`, background: margin === m ? "color-mix(in srgb,var(--sky) 14%,var(--surface2))" : "var(--surface2)", color: margin === m ? "var(--sky)" : "var(--text2)" }}>≤{m}</button>
           ))}
         </div>
       </div>
       <div style={{ fontSize: 11.5, color: "var(--text2)", marginBottom: 12, lineHeight: 1.5 }}>
-        {tab === "exam"
-          ? `Total reaches the pass mark, but the exam part (MCQ+CQ) is below ${thresh}% of its full marks on its own.`
-          : `Students within ${margin} marks of passing a subject or reaching the next grade.`}
+        Marks within {margin} of passing a subject or reaching the next grade.
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         {[
           { id: "fail", label: "Just failed", count: failNear.length, color: "var(--red)" },
-          { id: "exam", label: "Exam part", count: examRule.length, color: "var(--amber)" },
-          { id: "grade", label: "Next grade", count: gradeNear.length, color: "var(--sky)" },
+          { id: "grade", label: "Next grade", count: gradeNear.length, color: "var(--amber)" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 12, fontSize: 12, fontWeight: 700, border: `1.5px solid ${tab === t.id ? t.color : "var(--border)"}`, background: tab === t.id ? `color-mix(in srgb,${t.color} 10%,var(--surface2))` : "var(--surface2)", color: tab === t.id ? t.color : "var(--text2)" }}>
             {t.label} ({t.count})
@@ -2678,27 +2669,19 @@ const AlmostThereCard = ({ project }) => {
         </div>
       )}
 
-      {tab === "exam" && examRule.length > 0 && (
-        <div style={{ background: "color-mix(in srgb,var(--amber) 9%,var(--surface2))", border: "1.5px solid color-mix(in srgb,var(--amber) 28%,var(--border))", borderRadius: 12, padding: "9px 12px", fontSize: 12, color: "var(--text)", marginBottom: 12, lineHeight: 1.5 }}>
-          The app counts these students as <b style={{ color: "var(--red)" }}>failed</b>: a subject needs the pass mark on the total <i>and</i> on the exam part alone, so assignment/CA marks can't cover a low exam score.
-        </div>
-      )}
-
       {list.length === 0 ? (
         <div style={{ textAlign: "center", color: "var(--text2)", fontSize: 12.5, padding: "18px 0" }}>
-          {tab === "fail" ? "No one failed by this small a margin 🎉" : tab === "exam" ? "No one is failing only because of the exam-part rule 🎉" : "No one is this close to the next grade"}
+          {tab === "fail" ? "No one failed by this small a margin 🎉" : "No one is this close to the next grade"}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
-          {list.map(({ student, items, graceOnly, hasBlocked, onlyThis }) => (
+          {list.map(({ student, items, graceOnly, hasBlocked }) => (
             <div key={student.roll} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{student.name}</div>
                   <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {student.roll}</div>
                 </div>
-                {tab === "exam" && onlyThis && <Pill color="var(--amber)">Only the exam-part rule</Pill>}
-                {tab === "exam" && !onlyThis && <Pill color="var(--red)">Fails elsewhere too</Pill>}
                 {tab === "fail" && graceOnly && <Pill color="var(--green)">Passes with grace</Pill>}
                 {tab === "fail" && !graceOnly && hasBlocked && <Pill color="var(--amber)">Exam part blocks pass</Pill>}
                 {tab === "fail" && !graceOnly && !hasBlocked && <Pill color="var(--red)">Fails elsewhere too</Pill>}
@@ -2709,7 +2692,6 @@ const AlmostThereCard = ({ project }) => {
                   <span style={{ fontFamily: "var(--font-mono)", color: "var(--text2)" }}>{fmt(it.ab)}/{Math.round(it.full)}</span>
                   {tab === "grade" && <span style={{ fontSize: 11, color: "var(--text2)" }}>{it.from}→<b style={{ color: "var(--amber)" }}>{it.to}</b></span>}
                   <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, color: accent, minWidth: 44, textAlign: "right" }}>+{fmt(it.gap)}</span>
-                  {it.examRule && <span style={{ flexBasis: "100%", fontSize: 10.5, color: "var(--amber)", lineHeight: 1.4 }}>Total passes, but exam part is {fmt(it.examGot)}/{it.examFull} — needs {it.examNeed}, so short by {fmt(it.gap)} exam marks</span>}
                   {it.blocked && <span style={{ flexBasis: "100%", fontSize: 10.5, color: "var(--amber)", lineHeight: 1.4 }}>⚠ Exam part {fmt(it.examGot)}/{it.examFull} — needs {it.examNeed} to pass, so grace on the total alone won't pass this subject</span>}
                 </div>
               ))}
@@ -3989,6 +3971,8 @@ export default function Home() {
                         <StatTile label="Failed" value={fail} color={fail===0?"var(--green)":"var(--red)"}/>
                       </div>
 
+                      <AlmostThereCard project={activeProject}/>
+
                       <Card style={{marginBottom:14,borderRadius:16}}>
                         <div style={{fontWeight:700,fontSize:13.5,marginBottom:14}}>Pass / Fail</div>
                         <div style={{display:"flex",gap:9,marginBottom:10}}>
@@ -4072,7 +4056,6 @@ export default function Home() {
                           ))}
                         </Card>
                       )}
-                      <AlmostThereCard project={activeProject}/>
                     </>
                   );
                 })()}
