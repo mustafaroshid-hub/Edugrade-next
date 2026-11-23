@@ -2598,13 +2598,7 @@ const getAlmostThere = (project, margin) => {
         const gapOverall = (thresh / 100) * subFull - r.ab;
         const gapExam = (((thresh / 100) * examFull - r.rawExam) * examPct) / 100;
         const gap = r1(Math.max(gapOverall, gapExam, 0.1));
-        const examNeed = Math.ceil((thresh / 100) * examFull - 1e-9);
-        if (gap <= margin) {
-          failedItems.push({ subject: names[i], ab: r.ab, full: subFull, gap, examOnly: gapExam > gapOverall });
-        } else if (gapOverall > 0 && gapOverall <= margin) {
-          // close on the total, but the exam part is far below its own pass mark → blocked
-          failedItems.push({ subject: names[i], ab: r.ab, full: subFull, gap: r1(gapOverall), blocked: true, examGot: r.rawExam, examFull, examNeed });
-        }
+        if (gap <= margin) failedItems.push({ subject: names[i], ab: r.ab, full: subFull, gap, examOnly: gapExam > gapOverall });
       } else {
         const next = scale.find((g) => g.gp > r.gp && g.min > r.pct);
         if (next) {
@@ -2616,9 +2610,8 @@ const getAlmostThere = (project, margin) => {
     if (failedItems.length) {
       failNear.push({
         student: s, items: failedItems,
-        graceOnly: failedItems.length === failedCount && failedItems.every(x => !x.blocked),
-        hasBlocked: failedItems.some(x => x.blocked),
-        total: r1(failedItems.filter(x => !x.blocked).reduce((a, x) => a + x.gap, 0)),
+        graceOnly: failedItems.length === failedCount,
+        total: r1(failedItems.reduce((a, x) => a + x.gap, 0)),
       });
     }
     if (gradeItems.length) gradeNear.push({ student: s, items: gradeItems });
@@ -2675,7 +2668,7 @@ const AlmostThereCard = ({ project }) => {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
-          {list.map(({ student, items, graceOnly, hasBlocked }) => (
+          {list.map(({ student, items, graceOnly }) => (
             <div key={student.roll} style={{ background: "var(--surface2)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -2683,16 +2676,14 @@ const AlmostThereCard = ({ project }) => {
                   <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {student.roll}</div>
                 </div>
                 {tab === "fail" && graceOnly && <Pill color="var(--green)">Passes with grace</Pill>}
-                {tab === "fail" && !graceOnly && hasBlocked && <Pill color="var(--amber)">Exam part blocks pass</Pill>}
-                {tab === "fail" && !graceOnly && !hasBlocked && <Pill color="var(--red)">Fails elsewhere too</Pill>}
+                {tab === "fail" && !graceOnly && <Pill color="var(--red)">Fails elsewhere too</Pill>}
               </div>
               {items.map((it, k) => (
-                <div key={k} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 12, padding: "3px 0", borderTop: k ? "1px dashed var(--border)" : "none" }}>
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "3px 0", borderTop: k ? "1px dashed var(--border)" : "none" }}>
                   <span style={{ flex: 1, minWidth: 0, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.subject}</span>
                   <span style={{ fontFamily: "var(--font-mono)", color: "var(--text2)" }}>{fmt(it.ab)}/{Math.round(it.full)}</span>
                   {tab === "grade" && <span style={{ fontSize: 11, color: "var(--text2)" }}>{it.from}→<b style={{ color: "var(--amber)" }}>{it.to}</b></span>}
                   <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, color: accent, minWidth: 44, textAlign: "right" }}>+{fmt(it.gap)}</span>
-                  {it.blocked && <span style={{ flexBasis: "100%", fontSize: 10.5, color: "var(--amber)", lineHeight: 1.4 }}>⚠ Exam part {fmt(it.examGot)}/{it.examFull} — needs {it.examNeed} to pass, so grace on the total alone won't pass this subject</span>}
                 </div>
               ))}
             </div>
