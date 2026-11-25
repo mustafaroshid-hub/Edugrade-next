@@ -68,6 +68,13 @@ const getMeritRank = (students) =>
   sortByMerit(students)
     .reduce((acc, s, i) => { acc[String(s.roll)] = i + 1; return acc; }, {});
 
+// ─── Browser-history state (keeps Next.js internals, adds our screen) ────────
+const mkHistState = (p, root) => {
+  const base = { ...((typeof window !== "undefined" && window.history.state) || {}) };
+  delete base.root;
+  return { ...base, edu: 1, page: p, ...(root ? { root: true } : {}) };
+};
+
 // ─── Theme options ───────────────────────────────────────────────────────────
 const ACCENTS = {
   sky:     { label: "Sky",     s: "#0ea5e9", s2: "#38bdf8", s3: "#0284c7", s4: "#075985" },
@@ -201,6 +208,18 @@ const GlobalStyle = ({ dark, accent = "sky", textScale = 1 }) => {
     .dock-btn[data-active="1"] { background: color-mix(in srgb, var(--sky) 8%, transparent) !important; }
     .dock-btn[data-active="1"]::before { content: ""; position: absolute; top: -7px; left: 28%; right: 28%; height: 2px; border-radius: 0 0 3px 3px; background: var(--sky); box-shadow: 0 2px 10px var(--sky); }
     tbody tr { transition: background 0.15s; }
+    .table-scroll { overflow: auto; max-height: 72vh; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: thin; }
+    .table-scroll table { min-width: 560px; border-collapse: separate; border-spacing: 0; }
+    .table-scroll th, .table-scroll td { white-space: nowrap; }
+    .table-scroll thead th { position: sticky; top: 0; z-index: 3; }
+    .table-scroll th:first-child, .table-scroll td:first-child { position: sticky; left: 0; z-index: 2; background: var(--surface); }
+    .table-scroll thead th:first-child { z-index: 4; background: var(--surface2); }
+    .table-scroll tr:hover td:first-child { background: color-mix(in srgb, var(--sky) 4%, var(--surface)); }
+    .table-scroll.sticky1 td:first-child, .table-scroll.sticky1 th:first-child { box-shadow: 6px 0 8px -6px rgba(0,0,0,0.45); }
+    .table-scroll.sticky2 th:first-child, .table-scroll.sticky2 td:first-child { width: 52px; min-width: 52px; max-width: 52px; box-sizing: border-box; }
+    .table-scroll.sticky2 th:nth-child(2), .table-scroll.sticky2 td:nth-child(2) { position: sticky; left: 52px; z-index: 2; background: var(--surface); box-shadow: 6px 0 8px -6px rgba(0,0,0,0.45); }
+    .table-scroll.sticky2 thead th:nth-child(2) { z-index: 4; background: var(--surface2); }
+    .table-scroll.sticky2 tr:hover td:nth-child(2) { background: color-mix(in srgb, var(--sky) 4%, var(--surface)); }
     .fab {
       position: fixed; right: 18px; bottom: calc(84px + env(safe-area-inset-bottom));
       width: 54px; height: 54px; border-radius: 18px; border: none; z-index: 900;
@@ -667,7 +686,7 @@ const StudentListModal = ({ title, students, color, onClose }) => (
               fontSize: 12, fontWeight: 800, color,
             }}>{i + 1}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div>
+              <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
               <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {s.roll}</div>
             </div>
             <Pill color={color}>{s.grade}</Pill>
@@ -1650,10 +1669,10 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                               {(s.name || "?")[0].toUpperCase()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div>
+                              <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
                               <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {s.roll} · #{rank} merit</div>
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                               <span style={{ fontWeight: 800, fontSize: 14, color: gradeColor(s.grade), fontFamily: "var(--font-mono)" }}>{s.gpa}</span>
                               <Pill color={gradeColor(s.grade)}>{s.grade}</Pill>
                               <Pill color={s.status === "PASS" ? "var(--green)" : "var(--red)"}>{s.status}</Pill>
@@ -1774,10 +1793,10 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                     <div key={s.roll} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, background: rank <= 3 ? `color-mix(in srgb,${gradeColor(s.grade)} 8%,var(--surface))` : "var(--surface2)", border: `1px solid ${rank <= 3 ? gradeColor(s.grade) : "var(--border)"}` }}>
                       <div style={{ width: 32, textAlign: "center", fontWeight: 800, fontSize: medal ? 22 : 14, color: "var(--text2)", flexShrink: 0 }}>{medal || `#${rank}`}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
                         <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {s.roll} · Total: {s.total}</div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                         <span style={{ fontWeight: 800, fontSize: 16, color: gradeColor(s.grade), fontFamily: "var(--font-mono)" }}>{s.gpa}</span>
                         <Pill color={gradeColor(s.grade)}>{s.grade}</Pill>
                         <Pill color={s.status === "PASS" ? "var(--green)" : "var(--red)"}>{s.status}</Pill>
@@ -3111,7 +3130,59 @@ export default function Home() {
   const [projectsLoading, setProjectsLoading] = useState(false);
   const isAdmin = user?.email===ADMIN_EMAIL;
 
-  const go=useCallback((p)=>{ setPage(p); },[]);
+  const pageRef = useRef("home");
+  useEffect(()=>{ pageRef.current = page; },[page]);
+  const go=useCallback((p)=>{
+    if (p === pageRef.current) return;
+    try { window.history.pushState(mkHistState(p), ""); } catch {}
+    pageRef.current = p;
+    setPage(p);
+  },[]);
+
+  // Phone Back key: close the top pop-up first, else go to the previous screen,
+  // and on the first screen ask for a second press before leaving the app.
+  const onBackRef = useRef(null);
+  const exitArmedRef = useRef(0);
+  useEffect(()=>{
+    const restore = () => { try { window.history.pushState(mkHistState(pageRef.current), ""); } catch {} };
+    const closeTopOverlay = () => {
+      if (confirmModal)      { setConfirmModal(null); return true; }
+      if (showAdmin)         { setShowAdmin(false); return true; }
+      if (studentModal)      { setStudentModal(null); return true; }
+      if (shareModal)        { setShareModal(null); return true; }
+      if (reorderModalOpen)  { setReorderModalOpen(false); return true; }
+      if (tieModalOpen)      { setTieModalOpen(false); return true; }
+      if (renamingProject)   { setRenamingProject(null); return true; }
+      if (page === "app" && viewStudent) { setViewStudent(null); return true; }
+      return false;
+    };
+    onBackRef.current = (e) => {
+      if (closeTopOverlay()) { restore(); return; }
+      const st = e.state;
+      if (st && st.edu && st.root) {
+        if (exitArmedRef.current && Date.now() - exitArmedRef.current < 2200) {
+          exitArmedRef.current = 0;
+          try { window.history.back(); } catch {}
+          return;
+        }
+        exitArmedRef.current = Date.now();
+        showToast("Press back again to exit");
+        restore();
+        return;
+      }
+      if (st && st.edu && st.page) { pageRef.current = st.page; setPage(st.page); }
+    };
+  });
+  useEffect(()=>{
+    if (typeof window === "undefined") return;
+    try {
+      window.history.replaceState(mkHistState("home", true), "");
+      window.history.pushState(mkHistState("home"), "");
+    } catch {}
+    const onPop = (e) => { if (onBackRef.current) onBackRef.current(e); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  },[]);
 
   const activeProject = projects[activeProjectIndex]??null;
 
@@ -4119,7 +4190,7 @@ export default function Home() {
                           <div style={{fontSize:12,color:"var(--text2)"}}>Go to Entry tab to add students</div>
                         </div>
                       ):(
-                        <table>
+                        <div className="table-scroll sticky1"><table>
                           <thead><tr>
                             <th style={{paddingLeft:16}}>Name</th>
                             <th>Roll</th><th>GPA</th><th>Grade</th><th>Total</th><th>Status</th><th></th>
@@ -4137,7 +4208,7 @@ export default function Home() {
                               </tr>
                             ))}
                           </tbody>
-                        </table>
+                        </table></div>
                       )}
                     </Card>
                   </>
@@ -4374,7 +4445,7 @@ export default function Home() {
                     )}
 
                     <Card style={{overflowX:"auto",padding:0,marginBottom:14,borderRadius:18}}>
-                      <table>
+                      <div className="table-scroll sticky2"><table>
                         <thead><tr>
                           <th style={{paddingLeft:16}}>#</th>
                           <th>Name</th><th>Roll</th><th>Merit</th><th>GPA</th><th>Grade</th><th>Total</th>
@@ -4396,7 +4467,7 @@ export default function Home() {
                             );
                           })}
                         </tbody>
-                      </table>
+                      </table></div>
                     </Card>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
                       <Btn onClick={()=>downloadMeritListPDF(activeProject,showToast,meritSort)} style={{width:"100%",padding:"14px"}} size="lg"><IcoDownload s={15}/> Download Merit List PDF</Btn>
