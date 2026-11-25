@@ -68,8 +68,21 @@ const getMeritRank = (students) =>
   sortByMerit(students)
     .reduce((acc, s, i) => { acc[String(s.roll)] = i + 1; return acc; }, {});
 
+// ─── Theme options ───────────────────────────────────────────────────────────
+const ACCENTS = {
+  sky:     { label: "Sky",     s: "#0ea5e9", s2: "#38bdf8", s3: "#0284c7", s4: "#075985" },
+  indigo:  { label: "Indigo",  s: "#6366f1", s2: "#818cf8", s3: "#4f46e5", s4: "#3730a3" },
+  emerald: { label: "Emerald", s: "#10b981", s2: "#34d399", s3: "#059669", s4: "#065f46" },
+  rose:    { label: "Rose",    s: "#f43f5e", s2: "#fb7185", s3: "#e11d48", s4: "#9f1239" },
+  amber:   { label: "Amber",   s: "#f59e0b", s2: "#fbbf24", s3: "#d97706", s4: "#92400e" },
+};
+const TEXT_SCALES = { normal: 1, large: 1.1, xl: 1.2 };
+const GRADE_ORDER = ["A+", "A", "A-", "B", "C", "D", "F"];
+const gradeKeysOf = (dist) => [...GRADE_ORDER.filter(g => dist[g]), ...Object.keys(dist).filter(g => !GRADE_ORDER.includes(g) && dist[g])];
+
 // ─── CSS ─────────────────────────────────────────────────────────────────────
-const GlobalStyle = ({ dark }) => {
+const GlobalStyle = ({ dark, accent = "sky", textScale = 1 }) => {
+  const A = ACCENTS[accent] || ACCENTS.sky;
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -82,16 +95,16 @@ const GlobalStyle = ({ dark }) => {
       --text:     ${dark ? "#e2e8f5" : "#0b1729"};
       --text2:    ${dark ? "#8197b9" : "#5a6e88"};
       --text3:    ${dark ? "#5d78a0" : "#8396ae"};
-      --sky:      #0ea5e9;
-      --sky2:     #38bdf8;
-      --sky3:     #0284c7;
-      --sky4:     #075985;
+      --sky:      ${A.s};
+      --sky2:     ${A.s2};
+      --sky3:     ${A.s3};
+      --sky4:     ${A.s4};
       --indigo:   #6366f1;
       --green:    #10b981;
       --red:      #ef4444;
       --yellow:   #f59e0b;
       --amber:    #f97316;
-      --glow:     ${dark ? "rgba(14,165,233,0.15)" : "rgba(14,165,233,0.1)"};
+      --glow:     color-mix(in srgb, ${A.s} ${dark ? 15 : 10}%, transparent);
       --shadow-card: ${dark ? "0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 30px -22px rgba(0,0,0,0.7)" : "0 1px 2px rgba(16,24,40,0.05), 0 10px 24px -18px rgba(16,24,40,0.18)"};
       --font-sans: 'Sora', sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
@@ -173,11 +186,11 @@ const GlobalStyle = ({ dark }) => {
     .project-card:hover { border-color: color-mix(in srgb, var(--sky) 40%, var(--border)) !important; }
 
     /* ── polish ── */
-    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; zoom: ${textScale}; }
     body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
     body::before {
       content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-      background: radial-gradient(70% 42% at 50% -8%, ${dark ? "rgba(14,165,233,0.07)" : "rgba(14,165,233,0.05)"}, transparent 70%);
+      background: radial-gradient(70% 42% at 50% -8%, color-mix(in srgb, ${A.s} ${dark ? 8 : 6}%, transparent), transparent 70%);
     }
     ::selection { background: color-mix(in srgb, var(--sky) 30%, transparent); }
     button { transition: transform 0.12s ease, filter 0.15s ease, background 0.18s, border-color 0.18s, opacity 0.18s; -webkit-tap-highlight-color: transparent; }
@@ -188,6 +201,30 @@ const GlobalStyle = ({ dark }) => {
     .dock-btn[data-active="1"] { background: color-mix(in srgb, var(--sky) 8%, transparent) !important; }
     .dock-btn[data-active="1"]::before { content: ""; position: absolute; top: -7px; left: 28%; right: 28%; height: 2px; border-radius: 0 0 3px 3px; background: var(--sky); box-shadow: 0 2px 10px var(--sky); }
     tbody tr { transition: background 0.15s; }
+    .fab {
+      position: fixed; right: 18px; bottom: calc(84px + env(safe-area-inset-bottom));
+      width: 54px; height: 54px; border-radius: 18px; border: none; z-index: 900;
+      display: flex; align-items: center; justify-content: center; color: #fff;
+      background: linear-gradient(135deg, var(--sky2), var(--sky3));
+      box-shadow: 0 12px 26px -8px color-mix(in srgb, var(--sky) 70%, transparent), 0 2px 6px rgba(0,0,0,0.3);
+    }
+    @media (min-width: 1024px) {
+      nav.dock {
+        top: 0 !important; bottom: 0 !important; right: auto !important; left: 0; width: 232px;
+        flex-direction: column; justify-content: flex-start; gap: 4px;
+        padding: 28px 14px !important; border-top: none !important; border-right: 1px solid var(--border);
+        box-shadow: none !important; background: var(--surface) !important;
+        backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+      }
+      nav.dock > button {
+        flex: none !important; flex-direction: row !important; justify-content: flex-start !important;
+        gap: 12px !important; padding: 12px 14px !important; border-radius: 12px !important;
+      }
+      nav.dock > button span:last-child { font-size: 13.5px !important; }
+      .dock-btn[data-active="1"]::before { top: 22%; bottom: 22%; left: -14px; right: auto; width: 3px; height: auto; border-radius: 0 3px 3px 0; }
+      .app-shell { max-width: 860px !important; width: auto !important; margin-left: max(232px, calc((100vw - 628px) / 2)) !important; margin-right: auto !important; padding: 0 40px 80px !important; }
+      .fab { right: 32px; bottom: 32px; }
+    }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
     }
@@ -258,9 +295,9 @@ const Btn = ({ children, onClick, variant = "primary", style = {}, disabled, loa
   };
   const v = {
     primary: {
-      background: "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+      background: "linear-gradient(135deg, var(--sky2) 0%, var(--sky3) 100%)",
       color: "#fff",
-      boxShadow: "0 1px 2px rgba(2,60,100,0.35), 0 8px 18px -8px rgba(14,165,233,0.55)",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.3), 0 8px 18px -8px color-mix(in srgb, var(--sky) 60%, transparent)",
     },
     secondary: {
       background: "var(--surface2)", color: "var(--text)",
@@ -292,13 +329,18 @@ const Btn = ({ children, onClick, variant = "primary", style = {}, disabled, loa
   );
 };
 
-const Pill = ({ children, color }) => (
-  <span style={{
-    display: "inline-block", padding: "2px 9px", borderRadius: 20,
-    fontSize: 10.5, fontWeight: 700,
-    background: `color-mix(in srgb,${color} 13%,transparent)`, color,
-  }}>{children}</span>
-);
+const Pill = ({ children, color }) => {
+  // Pass/fail are shown with an icon as well as colour (colour-blind friendly)
+  const t = typeof children === "string" ? children : null;
+  const mark = (t === "PASS" || t === "P") ? "✓" : (t === "FAIL" || t === "F") ? "✗" : null;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 9px", borderRadius: 20,
+      fontSize: 10.5, fontWeight: 700,
+      background: `color-mix(in srgb,${color} 13%,transparent)`, color,
+    }}>{mark && <span aria-hidden="true">{mark}</span>}{children}</span>
+  );
+};
 
 const Toast = ({ msg }) => (
   <div style={{
@@ -325,7 +367,7 @@ const StatTile = ({ label, value, color, style = {}, onClick, actionLabel }) => 
         fontSize: 26, fontWeight: 800, color: color || "var(--sky)",
         fontFamily: "var(--font-mono)",
         lineHeight: 1,
-      }}>{value}</div>
+      }}><AnimatedNumber value={value} /></div>
       {onClick && (
         <button onClick={onClick} style={{
           padding: "5px 11px", borderRadius: 8,
@@ -378,6 +420,196 @@ const SectionHeader = ({ label, title, subtitle }) => (
     )}
     {title && <h2 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15, marginBottom: 4, letterSpacing: "-0.02em" }}>{title}</h2>}
     {subtitle && <p style={{ color: "var(--text2)", fontSize: 13 }}>{subtitle}</p>}
+  </div>
+);
+
+// ─── Count-up number ─────────────────────────────────────────────────────────
+const zeroOf = (value) => {
+  const m = String(value).match(/^(-?\d+(?:\.(\d+))?)(.*)$/);
+  return m ? (0).toFixed((m[2] || "").length) + m[3] : value;
+};
+const AnimatedNumber = ({ value }) => {
+  const [shown, setShown] = useState(() => zeroOf(value));
+  const prev = useRef(0);
+  useEffect(() => {
+    const m = String(value).match(/^(-?\d+(?:\.(\d+))?)(.*)$/);
+    if (!m) { setShown(value); return; }
+    const target = parseFloat(m[1]), suffix = m[3], dec = (m[2] || "").length;
+    const from = prev.current; prev.current = target;
+    const still = typeof window === "undefined" || from === target ||
+      (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    if (still) { setShown(value); return; }
+    let raf; const t0 = performance.now(), dur = 650;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      if (p < 1) { setShown((from + (target - from) * e).toFixed(dec) + suffix); raf = requestAnimationFrame(tick); }
+      else setShown(value);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{shown}</>;
+};
+
+// ─── Avatar (initials) ───────────────────────────────────────────────────────
+const Avatar = ({ name = "", size = 30 }) => {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  const initials = ((parts[0] ? parts[0][0] : "?") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+  let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return (
+    <div aria-hidden="true" style={{
+      width: size, height: size, borderRadius: size * 0.34, flexShrink: 0,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.38, fontWeight: 700, letterSpacing: "0.02em",
+      background: `hsl(${h} 60% 50% / 0.16)`, color: `hsl(${h} 70% 62%)`, border: `1px solid hsl(${h} 60% 50% / 0.25)`,
+    }}>{initials}</div>
+  );
+};
+
+// ─── Progress ring ───────────────────────────────────────────────────────────
+const ProgressRing = ({ value, size = 46, stroke = 5 }) => {
+  const r = (size - stroke) / 2, C = 2 * Math.PI * r, v = Math.max(0, Math.min(100, value || 0));
+  const c = v >= 80 ? "var(--green)" : v >= 50 ? "var(--yellow)" : "var(--red)";
+  return (
+    <div title="Pass rate" style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={c} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={`${(v / 100) * C} ${C}`} style={{ transition: "stroke-dasharray 0.8s ease" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.25, fontWeight: 800, fontFamily: "var(--font-mono)" }}>{Math.round(v)}%</div>
+    </div>
+  );
+};
+
+// ─── Charts ──────────────────────────────────────────────────────────────────
+const DonutChart = ({ data, size = 132, thickness = 16, centerValue, centerLabel }) => {
+  const total = data.reduce((a, d) => a + d.value, 0);
+  const r = (size - thickness) / 2, C = 2 * Math.PI * r;
+  let acc = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }} role="img" aria-label={`${centerValue} ${centerLabel}`}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={thickness} />
+      {total > 0 && data.filter(d => d.value > 0).map((d, i) => {
+        const frac = d.value / total, len = Math.max(frac * C - 2, 0.5);
+        const el = (
+          <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={d.color} strokeWidth={thickness}
+            strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc * C}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        );
+        acc += frac;
+        return el;
+      })}
+      <text x="50%" y="47%" textAnchor="middle" dominantBaseline="middle" style={{ fontSize: size * 0.22, fontWeight: 800, fill: "var(--text)", fontFamily: "var(--font-mono)" }}>{centerValue}</text>
+      <text x="50%" y="64%" textAnchor="middle" dominantBaseline="middle" style={{ fontSize: size * 0.085, fontWeight: 600, fill: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{centerLabel}</text>
+    </svg>
+  );
+};
+
+const GradeOverviewCard = ({ dist, total }) => {
+  const keys = gradeKeysOf(dist);
+  return (
+    <Card style={{ marginBottom: 14, borderRadius: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 14 }}>Grade Overview</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", justifyContent: "center" }}>
+        <DonutChart data={keys.map(g => ({ label: g, value: dist[g], color: gradeColor(g) }))} centerValue={total} centerLabel="students" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, auto)", gap: "8px 20px" }}>
+          {keys.map(g => (
+            <div key={g} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: gradeColor(g), flexShrink: 0 }} />
+              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, minWidth: 24 }}>{g}</span>
+              <span style={{ color: "var(--text2)" }}>{dist[g]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+const SubjectBarChart = ({ items }) => {
+  const H = 120;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: H + 52, overflowX: "auto", paddingBottom: 2 }}>
+      {items.map((it, i) => {
+        const v = Math.max(0, Math.min(100, Number(it.avg) || 0));
+        const c = v >= 60 ? "var(--green)" : v >= 40 ? "var(--yellow)" : "var(--red)";
+        return (
+          <div key={i} style={{ flex: "1 0 40px", minWidth: 40, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--font-mono)", color: c, marginBottom: 4 }}>{Math.round(v)}%</div>
+            <div style={{ width: "100%", maxWidth: 34, height: Math.max(3, (v / 100) * H), borderRadius: "8px 8px 3px 3px", background: `linear-gradient(180deg, ${c}, color-mix(in srgb, ${c} 50%, transparent))`, transition: "height 0.6s ease" }} />
+            <div title={it.name} style={{ fontSize: 9.5, color: "var(--text2)", marginTop: 6, maxWidth: 52, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Sticky live result bar (Entry) ──────────────────────────────────────────
+const LiveResultBar = ({ status, gpa, total, passed, count, name, roll }) => {
+  const pass = status === "PASS";
+  const c = pass ? "var(--green)" : "var(--red)";
+  return (
+    <div style={{
+      position: "sticky", top: 8, zIndex: 40, display: "flex", alignItems: "center", gap: 12, padding: "10px 12px",
+      borderRadius: 14, border: `1px solid color-mix(in srgb, ${c} 35%, var(--border))`,
+      background: `color-mix(in srgb, ${c} 9%, color-mix(in srgb, var(--surface) 92%, transparent))`,
+      backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", boxShadow: "0 10px 24px -14px rgba(0,0,0,0.5)",
+    }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {(name || "").trim() || "New student"}{roll ? <span style={{ color: "var(--text2)", fontWeight: 500 }}> · Roll {roll}</span> : null}
+        </div>
+        <div style={{ fontSize: 10.5, color: "var(--text2)", marginTop: 1 }}>{passed}/{count} subjects passed</div>
+      </div>
+      {[{ l: "GPA", v: gpa }, { l: "Total", v: Math.round(total) }].map(({ l, v }) => (
+        <div key={l} style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text2)" }}>{l}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--font-mono)", color: c, lineHeight: 1.2 }}>{v}</div>
+        </div>
+      ))}
+      <Pill color={c}>{status}</Pill>
+    </div>
+  );
+};
+
+// ─── Empty-state illustration ────────────────────────────────────────────────
+const EmptyArt = ({ kind = "project" }) => (
+  <svg width="132" height="104" viewBox="0 0 132 104" fill="none" aria-hidden="true" style={{ marginBottom: 14 }}>
+    <ellipse cx="66" cy="96" rx="44" ry="5" style={{ fill: "var(--border)", opacity: 0.6 }} />
+    <rect x="30" y="22" width="72" height="62" rx="10" transform="rotate(-6 66 53)" style={{ fill: "var(--surface2)", stroke: "var(--border)", strokeWidth: 1.5 }} />
+    <rect x="30" y="18" width="72" height="62" rx="10" style={{ fill: "var(--surface)", stroke: "color-mix(in srgb, var(--sky) 45%, var(--border))", strokeWidth: 1.5 }} />
+    {kind === "students" ? (
+      <>
+        <circle cx="66" cy="42" r="9" style={{ fill: "color-mix(in srgb, var(--sky) 22%, transparent)", stroke: "var(--sky)", strokeWidth: 1.5 }} />
+        <path d="M48 68c2-9 10-14 18-14s16 5 18 14" style={{ stroke: "var(--sky)", strokeWidth: 1.5, strokeLinecap: "round" }} />
+      </>
+    ) : (
+      <>
+        <rect x="42" y="32" width="48" height="6" rx="3" style={{ fill: "var(--sky)", opacity: 0.55 }} />
+        <rect x="42" y="46" width="36" height="5" rx="2.5" style={{ fill: "var(--text3)", opacity: 0.6 }} />
+        <rect x="42" y="58" width="42" height="5" rx="2.5" style={{ fill: "var(--text3)", opacity: 0.4 }} />
+      </>
+    )}
+    <circle cx="106" cy="22" r="3" style={{ fill: "var(--sky)", opacity: 0.5 }} />
+    <circle cx="20" cy="64" r="2.5" style={{ fill: "var(--sky)", opacity: 0.35 }} />
+  </svg>
+);
+
+// ─── Segmented control ───────────────────────────────────────────────────────
+const Segmented = ({ options, value, onChange }) => (
+  <div role="group" style={{ display: "flex", gap: 4, padding: 3, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12 }}>
+    {options.map(o => {
+      const on = value === o.value;
+      return (
+        <button key={o.value} onClick={() => onChange(o.value)} aria-pressed={on} style={{
+          flex: 1, padding: "8px 6px", borderRadius: 9, border: "none", fontSize: 12, fontWeight: 600,
+          background: on ? "var(--surface)" : "transparent", color: on ? "var(--sky)" : "var(--text2)",
+          boxShadow: on ? "0 1px 3px rgba(0,0,0,0.25)" : "none",
+        }}>{o.label}</button>
+      );
+    })}
   </div>
 );
 
@@ -1494,8 +1726,9 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                       </div>
                     ))}
                   </div>
+                  <GradeOverviewCard dist={gradeDist} total={activeProject.students.length} />
                   <Card>
-                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Grade Distribution</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Grade Details</div>
                     {Object.entries(gradeDist).sort().map(([g, cnt]) => (
                       <div key={g} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                         <div style={{ width: 32, fontWeight: 800, fontSize: 13, color: gradeColor(g) }}>{g}</div>
@@ -1708,20 +1941,20 @@ const IcoDownload = ({s=16}) => <SvgIcon size={s}><path d="M21 15v4a2 2 0 0 1-2 
 const IcoEye      = ({s=16}) => <SvgIcon size={s}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></SvgIcon>;
 const IcoWifiOff  = ({s=16}) => <SvgIcon size={s}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></SvgIcon>;
 const IcoBolt     = ({s=16}) => <SvgIcon size={s}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></SvgIcon>;
+const IcoChevron  = ({s=16}) => <SvgIcon size={s}><polyline points="6 9 12 15 18 9"/></SvgIcon>;
 const IcoMoon     = ({s=16}) => <SvgIcon size={s}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></SvgIcon>;
 
 // ─── Dock ─────────────────────────────────────────────────────────────────────
 const Dock = ({ page, go, isAdmin, onAdminOpen }) => {
   const tabs = [
     { id: "home",     icon: <IcoHome s={18}/>,     label: "Home" },
-    { id: "setup",    icon: <IcoPlus s={18}/>,     label: "New" },
-    { id: "app",      icon: <IcoPencil s={18}/>,   label: "Entry" },
+        { id: "app",      icon: <IcoPencil s={18}/>,   label: "Entry" },
     { id: "summary",  icon: <IcoBar s={18}/>,      label: "Stats" },
     { id: "merit",    icon: <IcoTrophy s={18}/>,   label: "Merit" },
     { id: "settings", icon: <IcoSettings s={18}/>, label: "Settings" },
   ];
   return (
-    <nav style={{
+    <nav className="dock" style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
       display: "flex", gap: 0, padding: "6px 4px calc(10px + env(safe-area-inset-bottom))",
       background: "color-mix(in srgb, var(--surface) 90%, transparent)",
@@ -3084,6 +3317,37 @@ export default function Home() {
   const [meritSort, setMeritSort] = useState("roll"); // "roll" | "merit"
   const [shareModal, setShareModal] = useState(null);
   const [online, setOnline] = useState(true);
+  const [themeMode, setThemeMode] = useState("dark");     // "light" | "dark" | "system"
+  const [accent, setAccent] = useState("sky");
+  const [textSize, setTextSize] = useState("normal");     // "normal" | "large" | "xl"
+  const [collapsedSubs, setCollapsedSubs] = useState({});
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectSort, setProjectSort] = useState("default");
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem("edu_theme_mode");
+      if (m === "light" || m === "dark" || m === "system") setThemeMode(m);
+      else { const d = localStorage.getItem("edu_dark"); if (d !== null) setThemeMode(JSON.parse(d) ? "dark" : "light"); }
+      const a = localStorage.getItem("edu_accent"); if (a && ACCENTS[a]) setAccent(a);
+      const t = localStorage.getItem("edu_text"); if (t && TEXT_SCALES[t]) setTextSize(t);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("edu_theme_mode", themeMode);
+      localStorage.setItem("edu_accent", accent);
+      localStorage.setItem("edu_text", textSize);
+    } catch {}
+  }, [themeMode, accent, textSize]);
+  useEffect(() => {
+    if (themeMode !== "system") { setDark(themeMode === "dark"); return; }
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => setDark(mq.matches);
+    apply();
+    if (mq.addEventListener) mq.addEventListener("change", apply);
+    return () => { if (mq.removeEventListener) mq.removeEventListener("change", apply); };
+  }, [themeMode]);
   useEffect(()=>{
     if(typeof window==="undefined") return;
     const ensure=(tag,attrs,sel)=>{
@@ -3260,9 +3524,22 @@ export default function Home() {
   };
 
   // ── Render ─────────────────────────────────────────────────────────
+  const visibleProjects = (() => {
+    const q = projectQuery.trim().toLowerCase();
+    const list = projects.map((p, i) => ({ p, i })).filter(({ p }) =>
+      !q || [p.examName, p.institution, p.className].filter(Boolean).join(" ").toLowerCase().includes(q));
+    const by = {
+      default: (a, b) => a.i - b.i,
+      new: (a, b) => b.i - a.i,
+      name: (a, b) => String(a.p.examName).localeCompare(String(b.p.examName)),
+      students: (a, b) => (b.p.students?.length || 0) - (a.p.students?.length || 0),
+    };
+    return list.sort(by[projectSort] || by.default);
+  })();
+
   return (
     <>
-      <GlobalStyle dark={dark}/>
+      <GlobalStyle dark={dark} accent={accent} textScale={TEXT_SCALES[textSize] || 1}/>
       {toast&&<Toast msg={toast}/>}
       {!online&&(
         <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(76px + env(safe-area-inset-bottom))",zIndex:1500,background:"color-mix(in srgb,var(--yellow) 16%,var(--surface))",border:"1px solid color-mix(in srgb,var(--yellow) 40%,var(--border))",color:"var(--yellow)",padding:"7px 16px",borderRadius:30,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",animation:"fadeIn 0.25s ease",display:"flex",alignItems:"center",gap:7}}><IcoWifiOff s={14}/> Offline · changes sync when you're back</div>
@@ -3285,7 +3562,7 @@ export default function Home() {
       {studentModal&&<StudentListModal title={studentModal.title} students={studentModal.students} color={studentModal.color} onClose={()=>setStudentModal(null)}/>}
       {shareModal&&firebase&&<ShareModal project={shareModal} firebase={firebase} user={user} userData={userData} showToast={showToast} onClose={()=>setShareModal(null)} onChanged={(list)=>{setProjects(prev=>prev.map(p=>p.id===shareModal.id?{...p,collaborators:list}:p));setShareModal(m=>m?{...m,collaborators:list}:m);}}/>}
 
-      <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px 120px",minHeight:"100vh"}}>
+      <div className="app-shell" style={{maxWidth:520,margin:"0 auto",padding:"0 16px 120px",minHeight:"100vh"}}>
 
         {/* ── Not logged in ── */}
         {fbReady&&authReady&&!user&&(
@@ -3327,9 +3604,23 @@ export default function Home() {
                 {/* Projects */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <div style={{fontWeight:700,fontSize:14,letterSpacing:"-0.01em"}}>My Projects</div>
-                  <Btn size="sm" onClick={()=>go("setup")}>+ New</Btn>
+                  <span style={{fontSize:11.5,color:"var(--text2)"}}>{projects.length} total</span>
                 </div>
 
+                {projects.length>3&&(
+                  <div style={{display:"flex",gap:8,marginBottom:12}}>
+                    <input placeholder="Search projects…" value={projectQuery} onChange={e=>setProjectQuery(e.target.value)} style={{flex:1}}/>
+                    <select value={projectSort} onChange={e=>setProjectSort(e.target.value)} aria-label="Sort projects" style={{padding:"0 10px",borderRadius:10,border:"1px solid var(--border)",background:"var(--surface2)",color:"var(--text)",fontFamily:"var(--font-sans)",fontSize:13,minHeight:44}}>
+                      <option value="default">Default</option>
+                      <option value="new">Newest</option>
+                      <option value="name">Name</option>
+                      <option value="students">Most students</option>
+                    </select>
+                  </div>
+                )}
+                {projects.length>0&&projectQuery.trim()&&visibleProjects.length===0&&(
+                  <div style={{textAlign:"center",color:"var(--text2)",fontSize:13,padding:"28px 0"}}>No projects match “{projectQuery.trim()}”</div>
+                )}
                 {projectsLoading?([1,2].map(k=>(
                   <div key={k} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:16,marginBottom:9,padding:"14px 16px",display:"flex",gap:14,alignItems:"center"}}>
                     <div style={{width:46,height:46,borderRadius:14,background:"var(--border)",flexShrink:0,animation:"pulse 1.5s ease-in-out infinite"}}/>
@@ -3340,12 +3631,12 @@ export default function Home() {
                   </div>
                 ))):projects.length===0?(
                   <div style={{textAlign:"center",padding:"48px 24px",background:"var(--surface)",border:"1.5px dashed var(--border)",borderRadius:20}}>
-                    <div style={{display:"flex",justifyContent:"center",marginBottom:16,opacity:0.5}}><IcoDoc s={56} c="var(--sky)"/></div>
+                    <div style={{display:"flex",justifyContent:"center"}}><EmptyArt kind="project"/></div>
                     <div style={{fontWeight:700,fontSize:16,marginBottom:8}}>No projects yet</div>
                     <div style={{fontSize:13,color:"var(--text2)",marginBottom:20,lineHeight:1.6}}>Create your first grading project<br/>to start entering student marks</div>
                     <Btn onClick={()=>go("setup")}>＋ New Project</Btn>
                   </div>
-                ):projects.map((p,i)=>{
+                ):visibleProjects.map(({p,i})=>{
                   const pass=p.students.filter(s=>s.status==="PASS").length;
                   const passRate=p.students.length?((pass/p.students.length)*100).toFixed(0):0;
                   return(
@@ -3355,7 +3646,7 @@ export default function Home() {
                           <IcoDoc s={22} c={["#38bdf8","#a78bfa","#34d399","#fb923c","#f472b6","#facc15"][i%6]}/>
                         </div>
                         <div onClick={()=>{setActiveProjectIndex(i);setSubjectEntries(freshEntries(p));setViewStudent(null);go("app");}} style={{flex:1,cursor:"pointer"}}>
-                          <div style={{fontWeight:700,fontSize:14.5,marginBottom:2,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>{p.examName}{p.shared&&<Pill color="var(--indigo)">Shared · {p.ownerName}</Pill>}{!p.shared&&(p.collaborators||[]).length>0&&<Pill color="var(--sky)">👥 {(p.collaborators||[]).length}</Pill>}</div>
+                          <div style={{fontWeight:700,fontSize:14.5,marginBottom:2,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>{p.examName}{p.shared&&<Pill color="var(--indigo)">Shared · {p.ownerName}</Pill>}{!p.shared&&(p.collaborators||[]).length>0&&<Pill color="var(--sky)"><IcoUsers s={11}/> {(p.collaborators||[]).length}</Pill>}</div>
                           <div style={{color:"var(--text2)",fontSize:12}}>
                             {p.institution&&<span>{p.institution}{p.className?" · "+p.className:""} · </span>}
                             {p.students.length} students · {p.subjectCount} subjects
@@ -3367,6 +3658,7 @@ export default function Home() {
                             </div>
                           )}
                         </div>
+                        {p.students.length>0&&<ProgressRing value={Number(passRate)}/>}
                       </div>
                       <div style={{display:p.shared?"none":"flex",borderTop:"1px solid var(--border)"}}>
                         {[
@@ -3583,7 +3875,24 @@ export default function Home() {
 
                     {/* Add Student Card */}
                     <Card style={{marginBottom:14,borderRadius:18}}>
-                      <div style={{fontWeight:700,fontSize:14,marginBottom:14,letterSpacing:"-0.01em"}}>+ Add / Update Student</div>
+                      {(()=>{
+                        const rolls=new Set(activeProject.students.map(s=>String(s.roll)));
+                        let nextRoll=1; while(rolls.has(String(nextRoll))) nextRoll++;
+                        const n=activeProject.subjectCount||0;
+                        const allCollapsed=n>0&&Array.from({length:n}).every((_,i)=>collapsedSubs[i]);
+                        return(
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14}}>
+                            <div>
+                              <div style={{fontWeight:700,fontSize:14,letterSpacing:"-0.01em"}}>+ Add / Update Student</div>
+                              <div style={{fontSize:11,color:"var(--text2)",marginTop:3}}>
+                                {activeProject.students.length} saved
+                                {activeProject.students.length>0&&<> · <button onClick={()=>setRoll(String(nextRoll))} style={{border:"none",background:"none",color:"var(--sky)",fontWeight:700,fontSize:11,padding:0}}>Next roll: {nextRoll}</button></>}
+                              </div>
+                            </div>
+                            {n>1&&<button onClick={()=>{const next={};for(let i=0;i<n;i++) next[i]=!allCollapsed;setCollapsedSubs(next);}} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:9,padding:"6px 10px",fontSize:11.5,fontWeight:700,color:"var(--text2)",whiteSpace:"nowrap"}}>{allCollapsed?"Expand all":"Collapse all"}</button>}
+                          </div>
+                        );
+                      })()}
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
                         <div><Label>Student Name</Label>
                           <input placeholder="Full name" value={studentName} onChange={e=>setStudentName(e.target.value)}/>
@@ -3595,6 +3904,12 @@ export default function Home() {
 
                       {/* Per-subject entry */}
                       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+                        {(()=>{
+                          const typed=subjectEntries.some(en=>(en.assignments||[]).some(v=>v!==""&&v!=null)||(en.mcq!==""&&en.mcq!=null)||(en.cq!==""&&en.cq!=null));
+                          if(!typed) return null;
+                          const live=calcStudent(subjectEntries,activeProject);
+                          return <LiveResultBar status={live.status} gpa={live.gpa} total={live.total} passed={live.subResults.filter(r=>r.pass).length} count={live.subResults.length} name={studentName} roll={roll}/>;
+                        })()}
                         {Array(activeProject.subjectCount).fill(null).map((_,si)=>{
                           const subName=activeProject.subjectNames?.[si]||`Subject ${si+1}`;
                           const ss=activeProject.subjectSettings?.[si]||{caFull:30,examFull:100,examPct:70};
@@ -3615,8 +3930,15 @@ export default function Home() {
                           return(
                             <div key={si} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
                               {/* Subject header */}
-                              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:"1px solid var(--border)",background:"var(--surface3)"}}>
-                                <div style={{fontWeight:700,fontSize:13}}>{subName}</div>
+                              <div onClick={()=>setCollapsedSubs(p=>({...p,[si]:!p[si]}))} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setCollapsedSubs(p=>({...p,[si]:!p[si]}));}}} role="button" tabIndex={0} aria-expanded={!collapsedSubs[si]} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:collapsedSubs[si]?"none":"1px solid var(--border)",background:"var(--surface3)",cursor:"pointer",userSelect:"none"}}>
+                                <div style={{fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:8}}>
+                                  <span style={{display:"inline-flex",transition:"transform 0.2s",transform:collapsedSubs[si]?"rotate(-90deg)":"none",color:"var(--text2)"}}><IcoChevron s={14}/></span>
+                                  {subName}
+                                  {(()=>{
+                                    const touched=(entry.assignments||[]).some(v=>v!==""&&v!=null)||(entry.mcq!==""&&entry.mcq!=null)||(entry.cq!==""&&entry.cq!=null);
+                                    return !touched?<span style={{fontSize:10,fontWeight:600,color:"var(--text3)"}}>Empty</span>:null;
+                                  })()}
+                                </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                                   <span style={{fontSize:11,color:"var(--text2)"}}>/{Math.round(subFull)}</span>
                                   <span style={{fontWeight:800,fontSize:14,color:gradeColor(grLive),fontFamily:"var(--font-mono)"}}>{grLive}</span>
@@ -3625,7 +3947,7 @@ export default function Home() {
                                 </div>
                               </div>
 
-                              <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                              {!collapsedSubs[si]&&<div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
                                 {Array(na).fill(null).map((_,ai)=>(
                                   <div key={ai} style={{display:"flex",alignItems:"center",gap:10}}>
                                     <span style={{fontSize:11,color:"#818cf8",fontWeight:600,minWidth:80}}>Assignment {ai+1}</span>
@@ -3667,7 +3989,7 @@ export default function Home() {
                                     </div>
                                   </div>
                                 </div>
-                              </div>
+                              </div>}
                             </div>
                           );
                         })}
@@ -3696,7 +4018,7 @@ export default function Home() {
                       const totalGP = (viewStudent.subjectResults||[]).reduce((s,r)=>s+(r.gp||0),0).toFixed(2);
                       const passCount = (viewStudent.subjectResults||[]).filter(r=>r.pass).length;
                       return (
-                      <Card style={{border:`1px solid color-mix(in srgb,${gradeColor(viewStudent.grade)} 28%,var(--border))`,background:`color-mix(in srgb,${gradeColor(viewStudent.grade)} 4%,var(--surface))`,animation:"up 0.25s ease",borderRadius:18,marginBottom:12}}>
+                      <Card style={{border:`1px solid color-mix(in srgb,${gradeColor(viewStudent.grade)} 28%,var(--border))`,background:`color-mix(in srgb,${gradeColor(viewStudent.grade)} 4%,var(--surface))`,animation:"up 0.25s ease",borderRadius:18,marginBottom:12,borderLeft:`4px solid ${viewStudent.status==="PASS"?"var(--green)":"var(--red)"}`}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                           <div>
                             <div style={{fontWeight:800,fontSize:18,letterSpacing:"-0.02em"}}>{viewStudent.name}</div>
@@ -3792,7 +4114,7 @@ export default function Home() {
                       </div>
                       {activeProject.students.length===0?(
                         <div style={{textAlign:"center",padding:"40px 24px"}}>
-                          <div style={{display:"flex",justifyContent:"center",marginBottom:12,opacity:0.35}}><IcoUsers s={48} c="var(--text2)"/></div>
+                          <div style={{display:"flex",justifyContent:"center"}}><EmptyArt kind="students"/></div>
                           <div style={{fontWeight:600,fontSize:13,marginBottom:4}}>No students yet</div>
                           <div style={{fontSize:12,color:"var(--text2)"}}>Go to Entry tab to add students</div>
                         </div>
@@ -3805,7 +4127,7 @@ export default function Home() {
                           <tbody>
                             {[...activeProject.students].sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})).map(s=>(
                               <tr key={s.roll} style={{cursor:"pointer"}} onClick={()=>setViewStudent(s)}>
-                                <td style={{fontWeight:600,paddingLeft:16}}>{s.name}</td>
+                                <td style={{fontWeight:600,paddingLeft:16,boxShadow:`inset 3px 0 0 ${s.status==="PASS"?"var(--green)":"var(--red)"}`}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={s.name} size={28}/>{s.name}</div></td>
                                 <td style={{fontFamily:"var(--font-mono)",color:"var(--text2)",fontSize:12}}>{s.roll}</td>
                                 <td style={{fontWeight:700,color:gradeColor(s.grade),fontFamily:"var(--font-mono)"}}>{s.gpa}</td>
                                 <td><Pill color={gradeColor(s.grade)}>{s.grade}</Pill></td>
@@ -3864,8 +4186,10 @@ export default function Home() {
                         </div>
                       </Card>
 
+                      <GradeOverviewCard dist={gradeDistrib} total={total}/>
+
                       <Card style={{marginBottom:14,borderRadius:16}}>
-                        <div style={{fontWeight:700,fontSize:13.5,marginBottom:14}}>Grade Distribution</div>
+                        <div style={{fontWeight:700,fontSize:13.5,marginBottom:14}}>Grade Details</div>
                         {["A+","A","A-","B","C","D","F"].map(g=>{
                           const count=gradeDistrib[g]||0;
                           const pct=total>0?((count/total)*100).toFixed(0):0;
@@ -3893,6 +4217,13 @@ export default function Home() {
                           );
                         })}
                       </Card>
+
+                      {subStats.length>0&&(
+                        <Card style={{marginBottom:14,borderRadius:16}}>
+                          <div style={{fontWeight:700,fontSize:13.5,marginBottom:14}}>Subject Averages</div>
+                          <SubjectBarChart items={subStats}/>
+                        </Card>
+                      )}
 
                       {subStats.length>0&&(
                         <Card style={{marginBottom:14,borderRadius:16}}>
@@ -3960,14 +4291,23 @@ export default function Home() {
                 </Card>
                 <Card style={{marginBottom:14}}>
                   <div style={{fontSize:10,fontWeight:700,color:"var(--text2)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>Appearance</div>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:18}}>
                     <div>
-                      <div style={{fontWeight:600,fontSize:14}}>Dark Mode</div>
-                      <div style={{color:"var(--text2)",fontSize:12,marginTop:2}}>Switch theme</div>
+                      <div style={{fontWeight:600,fontSize:13,marginBottom:8}}>Theme</div>
+                      <Segmented value={themeMode} onChange={setThemeMode} options={[{value:"light",label:"Light"},{value:"dark",label:"Dark"},{value:"system",label:"System"}]}/>
                     </div>
-                    <button onClick={()=>setDark(d=>!d)} style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",background:dark?"var(--sky)":"var(--border)",position:"relative",transition:"background 0.2s",flexShrink:0}}>
-                      <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:dark?24:3,transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
-                    </button>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>Accent colour</div>
+                      <div style={{display:"flex",gap:12}}>
+                        {Object.entries(ACCENTS).map(([k,a])=>(
+                          <button key={k} onClick={()=>setAccent(k)} aria-label={a.label} aria-pressed={accent===k} title={a.label} style={{width:34,height:34,borderRadius:"50%",border:"none",background:`linear-gradient(135deg,${a.s2},${a.s3})`,boxShadow:accent===k?"0 0 0 2px var(--surface), 0 0 0 4px var(--text)":"none",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:14,fontWeight:800}}>{accent===k?"✓":""}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:13,marginBottom:8}}>Text size</div>
+                      <Segmented value={textSize} onChange={setTextSize} options={[{value:"normal",label:"Normal"},{value:"large",label:"Large"},{value:"xl",label:"Extra large"}]}/>
+                    </div>
                   </div>
                 </Card>
                 <Card style={{marginBottom:14}}>
@@ -4020,6 +4360,7 @@ export default function Home() {
                             const isFirst=idx===0;
                             return(
                               <div key={s.roll} style={{flex:1,background:`color-mix(in srgb,${mc} 8%,var(--surface))`,border:`1px solid color-mix(in srgb,${mc} 28%,var(--border))`,borderRadius:16,padding:isFirst?"20px 10px 16px":"14px 10px 14px",textAlign:"center",transform:isFirst?"translateY(-6px)":"none",boxShadow:isFirst?`0 8px 24px color-mix(in srgb,${mc} 18%,transparent)`:"none"}}>
+                                <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><Avatar name={s.name} size={isFirst?46:38}/></div>
                                 <div style={{fontSize:isFirst?28:22,marginBottom:6}}>{medals[idx]}</div>
                                 <div style={{fontWeight:800,fontSize:12.5,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.01em"}}>{s.name}</div>
                                 <div style={{color:"var(--text2)",fontSize:10,marginBottom:8}}>Roll: {s.roll}</div>
@@ -4045,7 +4386,7 @@ export default function Home() {
                             return(
                               <tr key={s.roll}>
                                 <td style={{paddingLeft:16,color:"var(--text2)",fontSize:12,fontFamily:"var(--font-mono)"}}>{i+1}</td>
-                                <td style={{fontWeight:600,fontSize:13}}>{s.name}</td>
+                                <td style={{fontWeight:600,fontSize:13}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={s.name} size={26}/>{s.name}</div></td>
                                 <td style={{fontFamily:"var(--font-mono)",color:"var(--text2)",fontSize:12}}>{s.roll}</td>
                                 <td>{rankColor?(<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:"50%",fontSize:11,fontWeight:800,background:rankColor,color:"#fff"}}>{rank}</span>):(<span style={{color:"var(--text2)",fontSize:12,fontFamily:"var(--font-mono)"}}>#{rank}</span>)}</td>
                                 <td style={{fontWeight:700,color:gradeColor(s.grade),fontFamily:"var(--font-mono)"}}>{s.gpa}</td>
@@ -4069,6 +4410,9 @@ export default function Home() {
         )}
       </div>
 
+      {fbReady&&authReady&&user&&!fbError&&!isAccountBlocked&&page==="home"&&!projectsLoading&&projects.length>0&&(
+        <button className="fab" aria-label="New project" onClick={()=>go("setup")}><IcoPlus s={24} c="#fff"/></button>
+      )}
       {fbReady&&authReady&&user&&!fbError&&!isAccountBlocked&&(
         <Dock page={page} go={go} isAdmin={isAdmin} onAdminOpen={()=>setShowAdmin(true)}/>
       )}
