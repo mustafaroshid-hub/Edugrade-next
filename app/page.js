@@ -209,17 +209,17 @@ const GlobalStyle = ({ dark, accent = "sky", textScale = 1 }) => {
     .dock-btn[data-active="1"]::before { content: ""; position: absolute; top: -7px; left: 28%; right: 28%; height: 2px; border-radius: 0 0 3px 3px; background: var(--sky); box-shadow: 0 2px 10px var(--sky); }
     tbody tr { transition: background 0.15s; }
     .table-scroll { overflow: auto; max-height: 72vh; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: thin; }
-    .table-scroll table { min-width: 560px; border-collapse: separate; border-spacing: 0; }
+    .table-scroll table { width: 100%; min-width: 0; border-collapse: separate; border-spacing: 0; }
+    .table-scroll th { padding: 11px 9px; font-size: 10px; }
+    .table-scroll td { padding: 12px 9px; font-size: 12.5px; }
+    .table-scroll th:first-child, .table-scroll td:first-child { padding-left: 14px; }
+    .table-scroll tbody tr:last-child td { border-bottom: none; }
     .table-scroll th, .table-scroll td { white-space: nowrap; }
     .table-scroll thead th { position: sticky; top: 0; z-index: 3; }
-    .table-scroll th:first-child, .table-scroll td:first-child { position: sticky; left: 0; z-index: 2; background: var(--surface); }
+    .table-scroll th:first-child, .table-scroll td:first-child { position: sticky; left: 0; z-index: 2; background: var(--surface); min-width: 96px; }
     .table-scroll thead th:first-child { z-index: 4; background: var(--surface2); }
     .table-scroll tr:hover td:first-child { background: color-mix(in srgb, var(--sky) 4%, var(--surface)); }
     .table-scroll.sticky1 td:first-child, .table-scroll.sticky1 th:first-child { box-shadow: 6px 0 8px -6px rgba(0,0,0,0.45); }
-    .table-scroll.sticky2 th:first-child, .table-scroll.sticky2 td:first-child { width: 52px; min-width: 52px; max-width: 52px; box-sizing: border-box; }
-    .table-scroll.sticky2 th:nth-child(2), .table-scroll.sticky2 td:nth-child(2) { position: sticky; left: 52px; z-index: 2; background: var(--surface); box-shadow: 6px 0 8px -6px rgba(0,0,0,0.45); }
-    .table-scroll.sticky2 thead th:nth-child(2) { z-index: 4; background: var(--surface2); }
-    .table-scroll.sticky2 tr:hover td:nth-child(2) { background: color-mix(in srgb, var(--sky) 4%, var(--surface)); }
     .fab {
       position: fixed; right: 18px; bottom: calc(84px + env(safe-area-inset-bottom));
       width: 54px; height: 54px; border-radius: 18px; border: none; z-index: 900;
@@ -470,20 +470,6 @@ const AnimatedNumber = ({ value }) => {
   return <>{shown}</>;
 };
 
-// ─── Avatar (initials) ───────────────────────────────────────────────────────
-const Avatar = ({ name = "", size = 30 }) => {
-  const parts = String(name).trim().split(/\s+/).filter(Boolean);
-  const initials = ((parts[0] ? parts[0][0] : "?") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
-  let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  return (
-    <div aria-hidden="true" style={{
-      width: size, height: size, borderRadius: size * 0.34, flexShrink: 0,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.38, fontWeight: 700, letterSpacing: "0.02em",
-      background: `hsl(${h} 60% 50% / 0.16)`, color: `hsl(${h} 70% 62%)`, border: `1px solid hsl(${h} 60% 50% / 0.25)`,
-    }}>{initials}</div>
-  );
-};
 
 // ─── Progress ring ───────────────────────────────────────────────────────────
 const ProgressRing = ({ value, size = 46, stroke = 5 }) => {
@@ -1665,9 +1651,6 @@ const AdminUserWorkspace = ({ firebase, showToast, targetUser, onBack, onUserUpd
                       return (
                         <div key={s.roll}>
                           <div onClick={() => setViewStudent(isViewing ? null : s)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", cursor: "pointer", background: isViewing ? "color-mix(in srgb,var(--sky) 6%,var(--surface))" : undefined, borderBottom: "1px solid var(--border)" }}>
-                            <div style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg,var(--sky),var(--indigo))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-                              {(s.name || "?")[0].toUpperCase()}
-                            </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
                               <div style={{ color: "var(--text2)", fontSize: 11 }}>Roll: {s.roll} · #{rank} merit</div>
@@ -3036,6 +3019,8 @@ export default function Home() {
   const [page,     setPage]     = useState("home");
   const [dark,     setDark]     = useState(true);
   const [toast,    setToast]    = useState("");
+  const [undo,     setUndo]     = useState(null);
+  useEffect(()=>{ if(!undo) return; const t=setTimeout(()=>setUndo(null),6000); return ()=>clearTimeout(t); },[undo]);
   const [showAdmin,setShowAdmin]= useState(false);
   const [isAccountBlocked, setIsAccountBlocked] = useState(false);
 
@@ -3361,12 +3346,22 @@ export default function Home() {
     if(!activeProject) return;
     setConfirmModal({title:"Remove Student",msg:"Remove this student permanently?",ok:"Remove",onOk:async()=>{ setConfirmModal(null);
     try{
-      const nextStudents = await firebase.db.mutateStudents(activeProject.ownerUid||user.uid, activeProject.id, (current) => current.filter(s=>s.roll!==rollNo));
+      const removed = activeProject.students.find(s=>s.roll===rollNo);
+      const projId = activeProject.id, ownerId = activeProject.ownerUid||user.uid;
+      const nextStudents = await firebase.db.mutateStudents(ownerId, projId, (current) => current.filter(s=>s.roll!==rollNo));
       const pr={...activeProject,students:nextStudents};
       const updated=[...projects]; updated[activeProjectIndex]=pr;
       setProjects(updated);
       if(viewStudent?.roll===rollNo) setViewStudent(null);
-      showToast("✓ Student removed");
+      if(removed) setUndo({msg:"Student removed", fn: async()=>{
+        setUndo(null);
+        try{
+          const restored = await firebase.db.mutateStudents(ownerId, projId, (cur)=>cur.some(s=>s.roll===removed.roll)?cur:[...cur,removed]);
+          setProjects(prev=>prev.map(p=>p.id===projId?{...p,students:restored}:p));
+          showToast("✓ Student restored");
+        }catch(e){ showToast("✗ "+e.message); }
+      }});
+      else showToast("✓ Student removed");
     }catch(e){ showToast("✗ "+e.message); }
     }});
     return;
@@ -3612,6 +3607,12 @@ export default function Home() {
     <>
       <GlobalStyle dark={dark} accent={accent} textScale={TEXT_SCALES[textSize] || 1}/>
       {toast&&<Toast msg={toast}/>}
+      {undo&&!toast&&(
+        <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(84px + env(safe-area-inset-bottom))",zIndex:9998,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:40,padding:"8px 8px 8px 18px",display:"flex",alignItems:"center",gap:14,fontSize:13,fontWeight:600,color:"var(--text)",boxShadow:"0 12px 40px rgba(0,0,0,0.32)",whiteSpace:"nowrap",animation:"toastPop 0.24s cubic-bezier(0.34,1.56,0.64,1)"}}>
+          {undo.msg}
+          <button onClick={undo.fn} style={{border:"none",cursor:"pointer",background:"var(--sky)",color:"#fff",fontWeight:800,fontSize:12.5,padding:"7px 16px",borderRadius:30,fontFamily:"inherit"}}>Undo</button>
+        </div>
+      )}
       {!online&&(
         <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(76px + env(safe-area-inset-bottom))",zIndex:1500,background:"color-mix(in srgb,var(--yellow) 16%,var(--surface))",border:"1px solid color-mix(in srgb,var(--yellow) 40%,var(--border))",color:"var(--yellow)",padding:"7px 16px",borderRadius:30,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",animation:"fadeIn 0.25s ease",display:"flex",alignItems:"center",gap:7}}><IcoWifiOff s={14}/> Offline · changes sync when you're back</div>
       )}
@@ -4198,7 +4199,7 @@ export default function Home() {
                           <tbody>
                             {[...activeProject.students].sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})).map(s=>(
                               <tr key={s.roll} style={{cursor:"pointer"}} onClick={()=>setViewStudent(s)}>
-                                <td style={{fontWeight:600,paddingLeft:16,boxShadow:`inset 3px 0 0 ${s.status==="PASS"?"var(--green)":"var(--red)"}`}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={s.name} size={28}/>{s.name}</div></td>
+                                <td style={{fontWeight:600,paddingLeft:16,boxShadow:`inset 3px 0 0 ${s.status==="PASS"?"var(--green)":"var(--red)"}`}}>{s.name}</td>
                                 <td style={{fontFamily:"var(--font-mono)",color:"var(--text2)",fontSize:12}}>{s.roll}</td>
                                 <td style={{fontWeight:700,color:gradeColor(s.grade),fontFamily:"var(--font-mono)"}}>{s.gpa}</td>
                                 <td><Pill color={gradeColor(s.grade)}>{s.grade}</Pill></td>
@@ -4431,8 +4432,7 @@ export default function Home() {
                             const isFirst=idx===0;
                             return(
                               <div key={s.roll} style={{flex:1,background:`color-mix(in srgb,${mc} 8%,var(--surface))`,border:`1px solid color-mix(in srgb,${mc} 28%,var(--border))`,borderRadius:16,padding:isFirst?"20px 10px 16px":"14px 10px 14px",textAlign:"center",transform:isFirst?"translateY(-6px)":"none",boxShadow:isFirst?`0 8px 24px color-mix(in srgb,${mc} 18%,transparent)`:"none"}}>
-                                <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><Avatar name={s.name} size={isFirst?46:38}/></div>
-                                <div style={{fontSize:isFirst?28:22,marginBottom:6}}>{medals[idx]}</div>
+                                                                <div style={{fontSize:isFirst?28:22,marginBottom:6}}>{medals[idx]}</div>
                                 <div style={{fontWeight:800,fontSize:12.5,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.01em"}}>{s.name}</div>
                                 <div style={{color:"var(--text2)",fontSize:10,marginBottom:8}}>Roll: {s.roll}</div>
                                 <div style={{display:"inline-block",padding:"3px 10px",borderRadius:10,background:`color-mix(in srgb,${mc} 18%,transparent)`,color:mc,fontSize:12,fontWeight:800,fontFamily:"var(--font-mono)"}}>GPA {s.gpa}</div>
@@ -4445,10 +4445,9 @@ export default function Home() {
                     )}
 
                     <Card style={{overflowX:"auto",padding:0,marginBottom:14,borderRadius:18}}>
-                      <div className="table-scroll sticky2"><table>
+                      <div className="table-scroll sticky1"><table>
                         <thead><tr>
-                          <th style={{paddingLeft:16}}>#</th>
-                          <th>Name</th><th>Roll</th><th>Merit</th><th>GPA</th><th>Grade</th><th>Total</th>
+                          <th style={{paddingLeft:16}}>Name</th><th>Roll</th><th>Merit</th><th>GPA</th><th>Grade</th><th>Total</th>
                         </tr></thead>
                         <tbody>
                           {meritTableList.map((s,i)=>{
@@ -4456,10 +4455,9 @@ export default function Home() {
                             const rankColor=rank===1?"#f59e0b":rank===2?"#94a3b8":rank===3?"#cd7c2f":null;
                             return(
                               <tr key={s.roll}>
-                                <td style={{paddingLeft:16,color:"var(--text2)",fontSize:12,fontFamily:"var(--font-mono)"}}>{i+1}</td>
-                                <td style={{fontWeight:600,fontSize:13}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={s.name} size={26}/>{s.name}</div></td>
+                                <td style={{fontWeight:600,fontSize:13,paddingLeft:16}}>{s.name}</td>
                                 <td style={{fontFamily:"var(--font-mono)",color:"var(--text2)",fontSize:12}}>{s.roll}</td>
-                                <td>{rankColor?(<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:"50%",fontSize:11,fontWeight:800,background:rankColor,color:"#fff"}}>{rank}</span>):(<span style={{color:"var(--text2)",fontSize:12,fontFamily:"var(--font-mono)"}}>#{rank}</span>)}</td>
+                                <td>{rankColor?(<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",fontSize:11,fontWeight:800,background:rankColor,color:"#fff"}}>{rank}</span>):(<span style={{color:"var(--text2)",fontSize:12,fontFamily:"var(--font-mono)"}}>#{rank}</span>)}</td>
                                 <td style={{fontWeight:700,color:gradeColor(s.grade),fontFamily:"var(--font-mono)"}}>{s.gpa}</td>
                                 <td><Pill color={gradeColor(s.grade)}>{s.grade}</Pill></td>
                                 <td style={{fontFamily:"var(--font-mono)",fontSize:12.5}}>{typeof s.total==="number"?Math.round(s.total):s.total}</td>
